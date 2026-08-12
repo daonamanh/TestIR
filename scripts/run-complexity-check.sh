@@ -134,7 +134,7 @@ fi
 # =========================================================
 # 2. GO / GOLANG AUDIT (GolangCI-Lint)
 # =========================================================
-# 1. ĐẶT PATH LÊN TRÊN CÙNG ĐỂ ƯU TIÊN $HOME/BIN
+# 1. ÉP BASH DÙNG BINARY TRONG $HOME/BIN TRƯỚC
 export PATH="$HOME/bin:$PATH"
 
 if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
@@ -144,7 +144,7 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     set +e
     
-    # 2. Tạo cache sạch và dọn cache linter
+    # 2. Dọn sạch cache trước khi chạy
     export GOCACHE="/tmp/jenkins-gocache-$(date +%s)"
     golangci-lint cache clean > /dev/null 2>&1 || true
 
@@ -152,8 +152,17 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
         go mod tidy > /dev/null 2>&1 || true
     fi
 
-    # 3. Chạy linter với cờ -D typecheck để tắt linter gây lỗi mismatch export data
-    golangci-lint run ./... --config .golangci.yml -D typecheck > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+    # 3. CHỈ ĐỊNH CHÍNH XÁC 6 LINTER DÙNG ĐỂ CHECK COMPLEXITY (BỎ QUA HOÀN TOÀN TYPECHECK TẦNG SÂU)
+    golangci-lint run ./... \
+        --disable-all \
+        -E gocyclo \
+        -E gocognit \
+        -E cyclop \
+        -E funlen \
+        -E goconst \
+        -E nestif \
+        --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+        
     GO_STATUS=$?
     
     # Dọn dẹp cache tạm
@@ -173,7 +182,6 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     rm -f "$OUTPUT_DIR/go-tmp.txt"
     echo "</div>" >> "$REPORT_FILE"
 fi
-
 # =========================================================
 # 3. RUBY AUDIT (RuboCop)
 # =========================================================
