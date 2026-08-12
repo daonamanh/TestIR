@@ -63,9 +63,13 @@
 # echo "[+] Report successfully generated at: $REPORT_FILE"
 # exit $EXIT_CODE
 
-
 #!/usr/bin/env bash
 set -e
+
+# =========================================================
+# 0. ƯU TIÊN SỬ DỤNG GOLANGCI-LINT V1.61.0 TRONG $HOME/BIN
+# =========================================================
+export PATH="$HOME/bin:$PATH"
 
 echo "========================================="
 echo "   CODE COMPLEXITY AUDIT RUNNER         "
@@ -132,6 +136,7 @@ fi
 # =========================================================
 if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     echo "[+] Running GolangCI-Lint for Go..."
+    echo "Using binary: $(which golangci-lint) ($(golangci-lint --version | head -n1))"
     echo "<div class='section'><h2>🟦 Go / Golang Audit (GolangCI-Lint)</h2>" >> "$REPORT_FILE"
     
     set +e
