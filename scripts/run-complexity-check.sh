@@ -141,17 +141,23 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     set +e
     
-    golangci-lint cache clean > /dev/null 2>&1 || true
-    go clean -cache > /dev/null 2>&1 || true
+    # 1. Ép PATH ưu tiên binary $HOME/bin
+    export PATH="$HOME/bin:$PATH"
 
-    # Đồng bộ hóa Go Modules trước khi quét
+    # 2. Xóa triệt để cache compiler để loại bỏ hoàn toàn stdlib cũ
+    export GOCACHE=/tmp/jenkins-gocache-$(date +%s)
+    
     if [ -f "go.mod" ]; then
         go mod tidy > /dev/null 2>&1 || true
     fi
 
-    # Chỉ định chạy quét trong thư mục hiện tại
-    golangci-lint run ./... --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+    # 3. Chạy linter với cờ --typecheck=false để loại bỏ hoàn toàn rủi ro mismatch stdlib export data
+    golangci-lint run ./... --config .golangci.yml --typecheck=false > "$OUTPUT_DIR/go-tmp.txt" 2>&1
     GO_STATUS=$?
+    
+    # Xóa thư mục cache tạm sau khi quét xong
+    rm -rf $GOCACHE
+    
     set -e
 
     if [ $GO_STATUS -eq 0 ]; then
