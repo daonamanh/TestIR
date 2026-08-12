@@ -64,7 +64,6 @@
 # exit $EXIT_CODE
 
 
-
 #!/usr/bin/env bash
 set -e
 
@@ -92,7 +91,7 @@ cat <<EOF > "$REPORT_FILE"
         .pass { color: #16a34a; font-weight: bold; background: #f0fdf4; padding: 10px; border-radius: 4px; border: 1px solid #bbf7d0; }
         .fail { color: #dc2626; font-weight: bold; background: #fef2f2; padding: 10px; border-radius: 4px; border: 1px solid #fecaca; }
         iframe { width: 100%; height: 450px; border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 10px; background: white; }
-        pre { background: #0f172a; color: #f8fafc; padding: 15px; border-radius: 6px; overflow-x: auto; font-family: monospace; }
+        pre { background: #0f172a; color: #f8fafc; padding: 15px; border-radius: 6px; overflow-x: auto; font-family: monospace; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -136,7 +135,13 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     echo "<div class='section'><h2>🟦 Go / Golang Audit (GolangCI-Lint)</h2>" >> "$REPORT_FILE"
     
     set +e
-    golangci-lint run --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+    # Đồng bộ hóa Go Modules trước khi quét
+    if [ -f "go.mod" ]; then
+        go mod tidy > /dev/null 2>&1 || true
+    fi
+
+    # Chỉ định chạy quét trong thư mục hiện tại
+    golangci-lint run ./... --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
     GO_STATUS=$?
     set -e
 
