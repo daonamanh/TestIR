@@ -77,6 +77,7 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     set +e
     
+    # Tạo cache sạch riêng cho lượt build
     export GOCACHE="/tmp/jenkins-gocache-$(date +%s)"
     golangci-lint cache clean > /dev/null 2>&1 || true
 
@@ -84,9 +85,8 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
         go mod tidy > /dev/null 2>&1 || true
     fi
 
-    # BỎ CỜ -D typecheck VÌ .golangci.yml ĐÃ CÓ disable-all: true
+    # Chạy golangci-lint chuẩn theo file .golangci.yml
     golangci-lint run ./... --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
-        
     GO_STATUS=$?
     
     rm -rf "$GOCACHE"

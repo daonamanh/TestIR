@@ -5,30 +5,31 @@ run:
 linters:
   disable-all: true
   enable:
-    - gocyclo      # Kiểm tra độ phức tạp McCabe (Cyclomatic Complexity)
-    - gocognit     # Kiểm tra độ phức tạp nhận thức (Cognitive Complexity)
+    - typecheck    # BẮT BUỘC: Để linter phân tích được AST của Go
+    - gocyclo      # Kiểm tra Cyclomatic Complexity
+    - gocognit     # Kiểm tra Cognitive Complexity
     - cyclop       # Giới hạn độ phức tạp của hàm
-    - funlen       # Giới hạn độ dài hàm (lines/statements)
-    - goconst      # Phát hiện chuỗi lặp lại nên chuyển thành Hằng số (Constant)
-    - nestif       # Kiểm tra mức độ lồng lặp của câu lệnh IF
+    - funlen       # Giới hạn độ dài hàm
+    - goconst      # Phát hiện chuỗi lặp lại
+    - nestif       # Kiểm tra IF lồng nhau
 
 linters-settings:
   gocyclo:
-    min-complexity: 10   # Cảnh báo nếu cyclomatic > 10
+    min-complexity: 10
 
   gocognit:
-    min-complexity: 15   # Cảnh báo nếu cognitive > 15
+    min-complexity: 15
 
   cyclop:
     max-complexity: 10
     package-average: 5.0
 
   funlen:
-    lines: 60        # Tối đa 60 dòng/hàm
-    statements: 40   # Tối đa 40 câu lệnh/hàm
+    lines: 60
+    statements: 40
 
   nestif:
-    min-complexity: 3    # Cảnh báo nếu IF lồng quá 3 tầng
+    min-complexity: 3
 
   goconst:
     min-len: 3
