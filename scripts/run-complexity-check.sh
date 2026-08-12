@@ -152,7 +152,8 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     fi
 
     # 3. Chạy linter với cờ --typecheck=false để loại bỏ hoàn toàn rủi ro mismatch stdlib export data
-    golangci-lint run ./... --config .golangci.yml --typecheck=false > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+   # Thay dòng chạy golangci-lint cũ bằng dòng này (Thêm -D typecheck):
+    golangci-lint run ./... --config .golangci.yml -D typecheck > "$OUTPUT_DIR/go-tmp.txt" 2>&1
     GO_STATUS=$?
     
     # Xóa thư mục cache tạm sau khi quét xong
