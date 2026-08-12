@@ -86,14 +86,9 @@ pipeline {
     }
 
     stages {
-        stage('1. Checkout SCM') {
-            steps {
-                echo '=== Tải mã nguồn mới nhất từ Git ==='
-                checkout scm
-            }
-        }
+        // ĐÃ XÓA STAGE 1 (Checkout SCM): Tránh gọi Git fetch 2 lần gây timeout port 443
 
-        stage('2. Install Dependencies & Tools') {
+        stage('1. Install Dependencies & Tools') {
             steps {
                 script {
                     echo '=== Cài đặt các thư viện và linter ==='
@@ -106,15 +101,10 @@ pipeline {
 
                     // 2. Go / Golang
                     if (fileExists('.golangci.yml') || fileExists('go.mod')) {
-                        echo '[+] Checking/Installing GolangCI-Lint...'
+                        echo '[+] Checking/Installing Go dependencies...'
                         sh '''
-                            # Nếu chưa có golangci-lint thì tự động cài đặt binary nhanh
-                            if ! command -v golangci-lint &> /dev/null; then
-                                curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH 2>/dev/null || echo "$HOME/go")/bin v1.55.2 || true
-                                export PATH=$PATH:$HOME/go/bin
-                            fi
-                            if fileExists "go.mod"; then
-                                go mod download || true
+                            if [ -f "go.mod" ]; then
+                                go mod tidy || true
                             fi
                         '''
                     }
@@ -123,7 +113,6 @@ pipeline {
                     if (fileExists('.rubocop.yml') || fileExists('Gemfile')) {
                         echo '[+] Checking/Installing RuboCop...'
                         sh '''
-                            # Nếu chưa có rubocop gem thì tự cài đặt
                             if ! command -v rubocop &> /dev/null; then
                                 gem install rubocop || true
                             fi
@@ -136,19 +125,19 @@ pipeline {
             }
         }
 
-        stage('3. Run Complexity Audit') {
+        stage('2. Run Complexity Audit') {
             steps {
                 script {
                     echo '=== Chạy script kiểm tra độ phức tạp code ==='
                     sh 'chmod +x ./scripts/run-complexity-check.sh'
                     
-                    // Cho phép script trả về lỗi (exit code != 0) mà không làm sập hỏng Pipeline
-                    sh 'export PATH=$PATH:$HOME/go/bin && ./scripts/run-complexity-check.sh || true'
+                    // Thực thi runner kiểm tra (JS/TS, Go v1.61.0, Ruby)
+                    sh './scripts/run-complexity-check.sh || true'
                 }
             }
         }
 
-        stage('4. Publish HTML Report') {
+        stage('3. Publish HTML Report') {
             steps {
                 echo '=== Đẩy báo cáo HTML lên giao diện Jenkins ==='
                 publishHTML([
