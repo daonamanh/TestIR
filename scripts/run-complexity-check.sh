@@ -65,7 +65,6 @@ if [ -f "package.json" ]; then
     rm -f "$OUTPUT_DIR/eslint-tmp.html"
     echo "</div>" >> "$REPORT_FILE"
 fi
-
 # =========================================================
 # 2. GO / GOLANG AUDIT (GolangCI-Lint)
 # =========================================================
@@ -85,10 +84,8 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
         go mod tidy > /dev/null 2>&1 || true
     fi
 
-    # CHẠY THEO CẤU HÌNH YML NỘI BỘ VÀ TẮT TYPECHECK ĐỂ NÉ LỖI GOARCH
-    golangci-lint run ./... \
-        --config .golangci.yml \
-        -D typecheck > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+    # BỎ CỜ -D typecheck VÌ .golangci.yml ĐÃ CÓ disable-all: true
+    golangci-lint run ./... --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
         
     GO_STATUS=$?
     
