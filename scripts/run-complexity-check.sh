@@ -154,6 +154,7 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
 
     # 3. CHỈ ĐỊNH CHÍNH XÁC 6 LINTER DÙNG ĐỂ CHECK COMPLEXITY (BỎ QUA HOÀN TOÀN TYPECHECK TẦNG SÂU)
     golangci-lint run ./... \
+    --config .golangci.yml \
         --disable-all \
         -E gocyclo \
         -E gocognit \
