@@ -140,6 +140,10 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     echo "<div class='section'><h2>🟦 Go / Golang Audit (GolangCI-Lint)</h2>" >> "$REPORT_FILE"
     
     set +e
+    
+    golangci-lint cache clean > /dev/null 2>&1 || true
+    go clean -cache > /dev/null 2>&1 || true
+
     # Đồng bộ hóa Go Modules trước khi quét
     if [ -f "go.mod" ]; then
         go mod tidy > /dev/null 2>&1 || true
