@@ -134,6 +134,9 @@ fi
 # =========================================================
 # 2. GO / GOLANG AUDIT (GolangCI-Lint)
 # =========================================================
+# 1. ĐẶT PATH LÊN TRÊN CÙNG ĐỂ ƯU TIÊN $HOME/BIN
+export PATH="$HOME/bin:$PATH"
+
 if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     echo "[+] Running GolangCI-Lint for Go..."
     echo "Using binary: $(which golangci-lint) ($(golangci-lint --version | head -n1))"
@@ -141,23 +144,20 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     set +e
     
-    # 1. Ép PATH ưu tiên binary $HOME/bin
-    export PATH="$HOME/bin:$PATH"
+    # 2. Tạo cache sạch và dọn cache linter
+    export GOCACHE="/tmp/jenkins-gocache-$(date +%s)"
+    golangci-lint cache clean > /dev/null 2>&1 || true
 
-    # 2. Xóa triệt để cache compiler để loại bỏ hoàn toàn stdlib cũ
-    export GOCACHE=/tmp/jenkins-gocache-$(date +%s)
-    
     if [ -f "go.mod" ]; then
         go mod tidy > /dev/null 2>&1 || true
     fi
 
-    # 3. Chạy linter với cờ --typecheck=false để loại bỏ hoàn toàn rủi ro mismatch stdlib export data
-   # Thay dòng chạy golangci-lint cũ bằng dòng này (Thêm -D typecheck):
+    # 3. Chạy linter với cờ -D typecheck để tắt linter gây lỗi mismatch export data
     golangci-lint run ./... --config .golangci.yml -D typecheck > "$OUTPUT_DIR/go-tmp.txt" 2>&1
     GO_STATUS=$?
     
-    # Xóa thư mục cache tạm sau khi quét xong
-    rm -rf $GOCACHE
+    # Dọn dẹp cache tạm
+    rm -rf "$GOCACHE"
     
     set -e
 
