@@ -10,7 +10,6 @@ linters:
     - funlen       # Giới hạn độ dài hàm (lines/statements)
     - goconst      # Phát hiện chuỗi lặp lại nên chuyển thành Hằng số (Constant)
     - nestif       # Kiểm tra mức độ lồng lặp của câu lệnh IF
-    - maintainability # Kiểm tra chỉ số bảo trì code
 
 linters-settings:
   gocyclo:
