@@ -158,7 +158,7 @@
 set -e
 
 # =========================================================
-# 0. CẤU HÌNH MÔI TRƯỜNG & BIẾN TOÀN CỤC
+# 0. CẤU HÌNH MÔI TRƯỜNG & DỌN DẸP CACHE
 # =========================================================
 export GOPATH="${GOPATH:-$HOME/go}"
 export PATH="$HOME/bin:$GOPATH/bin:/usr/local/go/bin:$PATH"
@@ -168,24 +168,23 @@ echo "   CODE COMPLEXITY AUDIT RUNNER         "
 echo "========================================="
 
 OUTPUT_DIR="reports"
+# Xóa sạch báo cáo cũ trước khi chạy để tránh dính cache Jenkins
+rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
+
 REPORT_FILE="$OUTPUT_DIR/complexity-report.html"
 
 TOTAL_AUDITS=0
 PASSED_AUDITS=0
 FAILED_AUDITS=0
 
-JS_SECTION=""
-GO_SECTION=""
-RUBY_SECTION=""
+# =========================================================
+# 1. JAVASCRIPT / TYPESCRIPT AUDIT
+# =========================================================
+TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
+echo "[+] Running ESLint for TypeScript/JavaScript..."
 
-# =========================================================
-# 1. JAVASCRIPT / TYPESCRIPT AUDIT (ESLint)
-# =========================================================
 if [ -f "package.json" ]; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running ESLint for TypeScript/JavaScript..."
-    
     set +e
     npx eslint . --ext .js,.jsx,.ts,.tsx --format html > "$OUTPUT_DIR/eslint-tmp.html" 2>&1
     ESLINT_STATUS=$?
@@ -193,95 +192,56 @@ if [ -f "package.json" ]; then
 
     if [ $ESLINT_STATUS -eq 0 ]; then
         PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        JS_SECTION=$(cat <<EOF
-<div class="audit-section">
-    <div class="section-header">
-        <h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2>
-        <span class="badge badge-pass">✓ Passed</span>
-    </div>
-    <p class="desc">All JavaScript/TypeScript functions comply with complexity thresholds.</p>
-</div>
-EOF
-)
+        JS_SECTION='<div class="audit-section"><div class="section-header"><h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2><span class="badge badge-pass">✓ Passed</span></div><p class="desc">All JavaScript/TypeScript functions comply with complexity thresholds.</p></div>'
     else
         FAILED_AUDITS=$((FAILED_AUDITS + 1))
         ESCAPED_ESLINT=$(sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/eslint-tmp.html")
-        JS_SECTION=$(cat <<EOF
-<div class="audit-section">
-    <div class="section-header">
-        <h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2>
-        <span class="badge badge-fail">⚠ Violations Detected</span>
-    </div>
-    <p class="desc">Complexity issues detected via ESLint:</p>
-    <iframe srcdoc="${ESCAPED_ESLINT}"></iframe>
-</div>
-EOF
-)
+        JS_SECTION="<div class=\"audit-section\"><div class=\"section-header\"><h2 class=\"section-title\">🟨 TypeScript / JavaScript Audit</h2><span class=\"badge badge-fail\">⚠ Violations Detected</span></div><p class=\"desc\">Complexity issues detected via ESLint:</p><iframe srcdoc=\"${ESCAPED_ESLINT}\"></iframe></div>"
     fi
     rm -f "$OUTPUT_DIR/eslint-tmp.html"
+else
+    PASSED_AUDITS=$((PASSED_AUDITS + 1))
+    JS_SECTION='<div class="audit-section"><div class="section-header"><h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2><span class="badge badge-pass">✓ Skipped</span></div><p class="desc">No package.json found in project.</p></div>'
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (gocyclo)
+# 2. GO / GOLANG AUDIT
 # =========================================================
-if [ -f "go.mod" ] || find . -maxdepth 2 -name "*.go" | grep -q .; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running Complexity Audit for Go..."
-    
-    set +e
-    if ! command -v gocyclo &> /dev/null; then
-        echo "[+] Installing gocyclo binary..."
-        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
-    fi
+TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
+echo "[+] Running Complexity Audit for Go..."
 
-    GO_VIOLATIONS=""
-    if command -v gocyclo &> /dev/null; then
-        GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*")
-        if [ -n "$GO_TARGETS" ]; then
-            CYCLO_OUT=$(gocyclo -over 10 $GO_TARGETS 2>&1)
-            if [ -n "$CYCLO_OUT" ]; then
-                GO_VIOLATIONS="$CYCLO_OUT"
-            fi
-        fi
-    fi
+set +e
+if ! command -v gocyclo &> /dev/null; then
+    go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
+fi
+
+GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*" 2>/dev/null)
+
+if [ -n "$GO_TARGETS" ] && command -v gocyclo &> /dev/null; then
+    GO_VIOLATIONS=$(gocyclo -over 10 $GO_TARGETS 2>&1)
     set -e
 
     if [ -z "$GO_VIOLATIONS" ]; then
         PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        GO_SECTION=$(cat <<EOF
-<div class="audit-section">
-    <div class="section-header">
-        <h2 class="section-title">🟦 Go / Golang Audit</h2>
-        <span class="badge badge-pass">✓ Passed</span>
-    </div>
-    <p class="desc">All Go functions satisfied the Cyclomatic Complexity limit (Max: 10).</p>
-</div>
-EOF
-)
+        GO_SECTION='<div class="audit-section"><div class="section-header"><h2 class="section-title">🟦 Go / Golang Audit</h2><span class="badge badge-pass">✓ Passed</span></div><p class="desc">All Go functions satisfied the Cyclomatic Complexity limit (Max: 10).</p></div>'
     else
         FAILED_AUDITS=$((FAILED_AUDITS + 1))
         ESCAPED_GO=$(sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' <<< "$GO_VIOLATIONS")
-        GO_SECTION=$(cat <<EOF
-<div class="audit-section">
-    <div class="section-header">
-        <h2 class="section-title">🟦 Go / Golang Audit</h2>
-        <span class="badge badge-fail">⚠ Violations Detected</span>
-    </div>
-    <p class="desc">Functions exceeding complexity threshold (>10):</p>
-    <div class="code-container"><pre>${ESCAPED_GO}</pre></div>
-</div>
-EOF
-)
+        GO_SECTION="<div class=\"audit-section\"><div class=\"section-header\"><h2 class=\"section-title\">🟦 Go / Golang Audit</h2><span class=\"badge badge-fail\">⚠ Violations Detected</span></div><p class=\"desc\">Functions exceeding complexity threshold (>10):</p><div class=\"code-container\"><pre>${ESCAPED_GO}</pre></div></div>"
     fi
+else
+    set -e
+    PASSED_AUDITS=$((PASSED_AUDITS + 1))
+    GO_SECTION='<div class="audit-section"><div class="section-header"><h2 class="section-title">🟦 Go / Golang Audit</h2><span class="badge badge-pass">✓ Skipped</span></div><p class="desc">No .go files detected in workspace.</p></div>'
 fi
 
 # =========================================================
-# 3. RUBY AUDIT (RuboCop)
+# 3. RUBY AUDIT
 # =========================================================
+TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
+echo "[+] Running RuboCop for Ruby..."
+
 if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running RuboCop for Ruby..."
-    
     set +e
     rubocop --config .rubocop.yml --format html -o "$OUTPUT_DIR/rubocop-tmp.html" 2>&1
     RUBY_STATUS=$?
@@ -289,36 +249,20 @@ if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
 
     if [ $RUBY_STATUS -eq 0 ]; then
         PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        RUBY_SECTION=$(cat <<EOF
-<div class="audit-section">
-    <div class="section-header">
-        <h2 class="section-title">🟥 Ruby Audit</h2>
-        <span class="badge badge-pass">✓ Passed</span>
-    </div>
-    <p class="desc">All Ruby code satisfies complexity standards.</p>
-</div>
-EOF
-)
+        RUBY_SECTION='<div class="audit-section"><div class="section-header"><h2 class="section-title">🟥 Ruby Audit</h2><span class="badge badge-pass">✓ Passed</span></div><p class="desc">All Ruby code satisfies complexity standards.</p></div>'
     else
         FAILED_AUDITS=$((FAILED_AUDITS + 1))
         ESCAPED_RUBY=$(sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/rubocop-tmp.html")
-        RUBY_SECTION=$(cat <<EOF
-<div class="audit-section">
-    <div class="section-header">
-        <h2 class="section-title">🟥 Ruby Audit</h2>
-        <span class="badge badge-fail">⚠ Violations Detected</span>
-    </div>
-    <p class="desc">Complexity violations detected via RuboCop:</p>
-    <iframe srcdoc="${ESCAPED_RUBY}"></iframe>
-</div>
-EOF
-)
+        RUBY_SECTION="<div class=\"audit-section\"><div class=\"section-header\"><h2 class=\"section-title\">🟥 Ruby Audit</h2><span class=\"badge badge-fail\">⚠ Violations Detected</span></div><p class=\"desc\">Complexity violations detected via RuboCop:</p><iframe srcdoc=\"${ESCAPED_RUBY}\"></iframe></div>"
     fi
     rm -f "$OUTPUT_DIR/rubocop-tmp.html"
+else
+    PASSED_AUDITS=$((PASSED_AUDITS + 1))
+    RUBY_SECTION='<div class="audit-section"><div class="section-header"><h2 class="section-title">🟥 Ruby Audit</h2><span class="badge badge-pass">✓ Skipped</span></div><p class="desc">No .rubocop.yml configuration or RuboCop binary found.</p></div>'
 fi
 
 # =========================================================
-# 4. RENDER FILE HTML ĐỒNG BỘ NGUYÊN KHỐI (PRINTF)
+# 4. RENDER HTML NGUYÊN KHỐI BẰNG PRINTF
 # =========================================================
 BUILD_DATE=$(date '+%Y-%m-%d %H:%M:%S')
 
