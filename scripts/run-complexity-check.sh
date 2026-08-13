@@ -79,9 +79,10 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     golangci-lint cache clean > /dev/null 2>&1 || true
 
-    # BỎ *.go, CHỈ CHẠY ./... ĐỂ GOLANGCI-LINT QUÉT TOÀN BỘ MODULE CÙNG LÚC
+    # Ép golangci-lint báo tất cả lỗi mà không dùng bộ lọc mặc định
     golangci-lint run ./... \
         --config .golangci.yml \
+        --exclude-use-default=false \
         --issues-exit-code=1 > "$OUTPUT_DIR/go-tmp.txt" 2>&1
         
     GO_STATUS=$?
