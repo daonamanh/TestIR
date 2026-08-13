@@ -80,9 +80,8 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     # Dọn cache kết quả
     golangci-lint cache clean > /dev/null 2>&1 || true
 
-    # CHẠY CỜ -v ĐỂ XEM CHI TIẾT LINTER QUÉT NHỮNG FILE NÀO
-    golangci-lint run ./... \
-        -v \
+    # ÉP ĐƯỜNG DẪN QUÉT CẢ THƯ MỤC GỐC VÀ CÁC THƯ MỤC CON
+    golangci-lint run . ./... \
         --config .golangci.yml \
         --issues-exit-code=1 > "$OUTPUT_DIR/go-tmp.txt" 2>&1
         
@@ -92,11 +91,6 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
 
     if [ $GO_STATUS -eq 0 ]; then
         echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
-        # IN LOG VERBOSE NẾU BÁO PASSED ĐỂ DEBUG
-        echo "<p><b>Debug Output (Why Passed):</b></p>" >> "$REPORT_FILE"
-        echo "<pre>" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
-        echo "</pre>" >> "$REPORT_FILE"
     else
         echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
         echo "<pre>" >> "$REPORT_FILE"
