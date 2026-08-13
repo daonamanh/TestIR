@@ -175,7 +175,151 @@ TOTAL_AUDITS=0
 PASSED_AUDITS=0
 FAILED_AUDITS=0
 
-# Mở đầu HTML với UI Dashboard chuẩn Enterprise
+JS_CONTENT=""
+GO_CONTENT=""
+RUBY_CONTENT=""
+
+# =========================================================
+# 1. JAVASCRIPT / TYPESCRIPT AUDIT (ESLint)
+# =========================================================
+if [ -f "package.json" ]; then
+    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
+    echo "[+] Running ESLint for TypeScript/JavaScript..."
+    
+    set +e
+    npx eslint . --ext .js,.jsx,.ts,.tsx --format html > "$OUTPUT_DIR/eslint-tmp.html" 2>&1
+    ESLINT_STATUS=$?
+    set -e
+
+    if [ $ESLINT_STATUS -eq 0 ]; then
+        PASSED_AUDITS=$((PASSED_AUDITS + 1))
+        JS_CONTENT=$(cat <<EOF
+<div class="audit-section">
+  <div class="section-header">
+    <h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2>
+    <span class="badge badge-pass">✓ Passed</span>
+  </div>
+  <p style="color: var(--text-muted); margin:0;">All JavaScript/TypeScript functions comply with complexity thresholds.</p>
+</div>
+EOF
+)
+    else
+        FAILED_AUDITS=$((FAILED_AUDITS + 1))
+        IFRAME_DOC=$(sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/eslint-tmp.html")
+        JS_CONTENT=$(cat <<EOF
+<div class="audit-section">
+  <div class="section-header">
+    <h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2>
+    <span class="badge badge-fail">⚠ Violations Detected</span>
+  </div>
+  <p style="color: var(--text-muted); margin-bottom: 8px;">Complexity issues detected via ESLint:</p>
+  <iframe srcdoc="${IFRAME_DOC}"></iframe>
+</div>
+EOF
+)
+    fi
+    rm -f "$OUTPUT_DIR/eslint-tmp.html"
+fi
+
+# =========================================================
+# 2. GO / GOLANG AUDIT (Direct AST Cyclomatic Complexity)
+# =========================================================
+if [ -f "go.mod" ] || find . -maxdepth 2 -name "*.go" | grep -q .; then
+    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
+    echo "[+] Running Complexity Audit for Go..."
+    
+    set +e
+    if ! command -v gocyclo &> /dev/null; then
+        echo "[+] Installing gocyclo binary..."
+        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
+    fi
+
+    GO_VIOLATIONS=""
+    if command -v gocyclo &> /dev/null; then
+        GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*")
+        if [ -n "$GO_TARGETS" ]; then
+            CYCLO_OUT=$(gocyclo -over 10 $GO_TARGETS 2>&1)
+            if [ -n "$CYCLO_OUT" ]; then
+                GO_VIOLATIONS="$CYCLO_OUT"
+            fi
+        fi
+    fi
+    set -e
+
+    if [ -z "$GO_VIOLATIONS" ]; then
+        PASSED_AUDITS=$((PASSED_AUDITS + 1))
+        GO_CONTENT=$(cat <<EOF
+<div class="audit-section">
+  <div class="section-header">
+    <h2 class="section-title">🟦 Go / Golang Audit</h2>
+    <span class="badge badge-pass">✓ Passed</span>
+  </div>
+  <p style="color: var(--text-muted); margin:0;">All Go functions satisfied the Cyclomatic Complexity limit (Max: 10).</p>
+</div>
+EOF
+)
+    else
+        FAILED_AUDITS=$((FAILED_AUDITS + 1))
+        ESCAPED_GO_VIOLATIONS=$(sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' <<< "$GO_VIOLATIONS")
+        GO_CONTENT=$(cat <<EOF
+<div class="audit-section">
+  <div class="section-header">
+    <h2 class="section-title">🟦 Go / Golang Audit</h2>
+    <span class="badge badge-fail">⚠ Violations Detected</span>
+  </div>
+  <p style="color: var(--text-muted); margin-bottom: 8px;">Functions exceeding complexity threshold (>10):</p>
+  <div class="code-container"><pre>${ESCAPED_GO_VIOLATIONS}</pre></div>
+</div>
+EOF
+)
+    fi
+fi
+
+# =========================================================
+# 3. RUBY AUDIT (RuboCop)
+# =========================================================
+if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
+    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
+    echo "[+] Running RuboCop for Ruby..."
+    
+    set +e
+    rubocop --config .rubocop.yml --format html -o "$OUTPUT_DIR/rubocop-tmp.html" 2>&1
+    RUBY_STATUS=$?
+    set -e
+
+    if [ $RUBY_STATUS -eq 0 ]; then
+        PASSED_AUDITS=$((PASSED_AUDITS + 1))
+        RUBY_CONTENT=$(cat <<EOF
+<div class="audit-section">
+  <div class="section-header">
+    <h2 class="section-title">🟥 Ruby Audit</h2>
+    <span class="badge badge-pass">✓ Passed</span>
+  </div>
+  <p style="color: var(--text-muted); margin:0;">All Ruby code satisfies complexity standards.</p>
+</div>
+EOF
+)
+    else
+        FAILED_AUDITS=$((FAILED_AUDITS + 1))
+        IFRAME_RUBY=$(sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/rubocop-tmp.html")
+        RUBY_CONTENT=$(cat <<EOF
+<div class="audit-section">
+  <div class="section-header">
+    <h2 class="section-title">🟥 Ruby Audit</h2>
+    <span class="badge badge-fail">⚠ Violations Detected</span>
+  </div>
+  <p style="color: var(--text-muted); margin-bottom: 8px;">Complexity violations detected via RuboCop:</p>
+  <iframe srcdoc="${IFRAME_RUBY}"></iframe>
+</div>
+EOF
+)
+    fi
+    rm -f "$OUTPUT_DIR/rubocop-tmp.html"
+fi
+
+# =========================================================
+# 4. XUẤT TOÀN BỘ BÁO CÁO HTML
+# =========================================================
 cat <<EOF > "$REPORT_FILE"
 <!DOCTYPE html>
 <html lang="vi">
@@ -193,7 +337,6 @@ cat <<EOF > "$REPORT_FILE"
             --border-color: #334155;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
-            --accent-blue: #38bdf8;
             --pass-bg: rgba(34, 197, 94, 0.1);
             --pass-border: #22c55e;
             --pass-text: #4ade80;
@@ -214,21 +357,16 @@ cat <<EOF > "$REPORT_FILE"
 
         .container { max-width: 1200px; margin: 0 auto; }
 
-        /* Header UI */
         .header {
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             padding: 24px 30px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
             margin-bottom: 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
-        .header h1 { margin: 0; font-size: 22px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 700; color: #fff; }
         .header p { margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted); }
 
-        /* Metrics Summary Cards */
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -246,7 +384,6 @@ cat <<EOF > "$REPORT_FILE"
         .metric-card.pass .value { color: var(--pass-text); }
         .metric-card.fail .value { color: var(--fail-text); }
 
-        /* Section Cards */
         .audit-section {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -263,9 +400,8 @@ cat <<EOF > "$REPORT_FILE"
             padding-bottom: 12px;
             border-bottom: 1px solid var(--border-color);
         }
-        .section-title { font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px; }
+        .section-title { font-size: 18px; font-weight: 600; margin: 0; }
 
-        /* Status Badges */
         .badge {
             padding: 6px 14px;
             border-radius: 20px;
@@ -273,14 +409,10 @@ cat <<EOF > "$REPORT_FILE"
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.03em;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
         }
         .badge-pass { background: var(--pass-bg); border: 1px solid var(--pass-border); color: var(--pass-text); }
         .badge-fail { background: var(--fail-bg); border: 1px solid var(--fail-border); color: var(--fail-text); }
 
-        /* Violation Code Blocks */
         .code-container {
             background: #090d16;
             border: 1px solid var(--border-color);
@@ -299,10 +431,10 @@ cat <<EOF > "$REPORT_FILE"
         }
         iframe {
             width: 100%;
-            height: 400px;
+            height: 520px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            background: white;
+            background: #fff;
             margin-top: 12px;
         }
     </style>
@@ -310,163 +442,32 @@ cat <<EOF > "$REPORT_FILE"
 <body>
     <div class="container">
         <div class="header">
-            <div>
-                <h1>📊 Multi-Language Code Complexity Audit</h1>
-                <p>Divoro Diligence Work Compliance Report | Generated: $(date '+%Y-%m-%d %H:%M:%S')</p>
-            </div>
+            <h1>📊 Multi-Language Code Complexity Audit</h1>
+            <p>Divoro Diligence Work Compliance Report | Generated: $(date '+%Y-%m-%d %H:%M:%S')</p>
         </div>
-EOF
 
-# Placeholder cho phần Metrics Summary (Sẽ dùng sed điền số liệu ở cuối)
-cat <<EOF >> "$REPORT_FILE"
         <div class="summary-grid">
             <div class="metric-card">
                 <div class="title">Total Audits</div>
-                <div class="value" id="stat-total">__TOTAL_AUDITS__</div>
+                <div class="value">${TOTAL_AUDITS}</div>
             </div>
             <div class="metric-card pass">
                 <div class="title">Passed</div>
-                <div class="value" id="stat-passed">__PASSED_AUDITS__</div>
+                <div class="value">${PASSED_AUDITS}</div>
             </div>
             <div class="metric-card fail">
                 <div class="title">Violations</div>
-                <div class="value" id="stat-failed">__FAILED_AUDITS__</div>
+                <div class="value">${FAILED_AUDITS}</div>
             </div>
         </div>
-EOF
 
-# =========================================================
-# 1. JAVASCRIPT / TYPESCRIPT AUDIT (ESLint)
-# =========================================================
-if [ -f "package.json" ]; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running ESLint for TypeScript/JavaScript..."
-    
-    set +e
-    npx eslint . --ext .js,.jsx,.ts,.tsx --format html > "$OUTPUT_DIR/eslint-tmp.html" 2>&1
-    ESLINT_STATUS=$?
-    set -e
-
-    echo "<div class='audit-section'>" >> "$REPORT_FILE"
-    echo "  <div class='section-header'>" >> "$REPORT_FILE"
-    echo "    <h2 class='section-title'>🟨 TypeScript / JavaScript Audit</h2>" >> "$REPORT_FILE"
-
-    if [ $ESLINT_STATUS -eq 0 ]; then
-        PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        echo "    <span class='badge badge-pass'>✓ Passed</span>" >> "$REPORT_FILE"
-        echo "  </div>" >> "$REPORT_FILE"
-        echo "  <p style='color: var(--text-muted); margin:0;'>All JavaScript/TypeScript functions comply with complexity thresholds.</p>" >> "$REPORT_FILE"
-    else
-        FAILED_AUDITS=$((FAILED_AUDITS + 1))
-        echo "    <span class='badge badge-fail'>⚠ Violations Detected</span>" >> "$REPORT_FILE"
-        echo "  </div>" >> "$REPORT_FILE"
-        echo "  <p style='color: var(--text-muted); margin-bottom: 8px;'>Complexity issues detected via ESLint:</p>" >> "$REPORT_FILE"
-        echo -n "  <iframe srcdoc=\"" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/eslint-tmp.html" >> "$REPORT_FILE"
-        echo "\"></iframe>" >> "$REPORT_FILE"
-    fi
-
-    rm -f "$OUTPUT_DIR/eslint-tmp.html"
-    echo "</div>" >> "$REPORT_FILE"
-fi
-
-# =========================================================
-# 2. GO / GOLANG AUDIT (Direct AST Cyclomatic Complexity)
-# =========================================================
-if [ -f "go.mod" ] || find . -maxdepth 2 -name "*.go" | grep -q .; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running Complexity Audit for Go..."
-    
-    set +e
-
-    if ! command -v gocyclo &> /dev/null; then
-        echo "[+] Installing gocyclo binary..."
-        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
-    fi
-
-    GO_VIOLATIONS=""
-    if command -v gocyclo &> /dev/null; then
-        GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*")
-        if [ -n "$GO_TARGETS" ]; then
-            CYCLO_OUT=$(gocyclo -over 10 $GO_TARGETS 2>&1)
-            if [ -n "$CYCLO_OUT" ]; then
-                GO_VIOLATIONS="$CYCLO_OUT"
-            fi
-        fi
-    fi
-
-    set -e
-
-    echo "<div class='audit-section'>" >> "$REPORT_FILE"
-    echo "  <div class='section-header'>" >> "$REPORT_FILE"
-    echo "    <h2 class='section-title'>🟦 Go / Golang Audit</h2>" >> "$REPORT_FILE"
-
-    if [ -z "$GO_VIOLATIONS" ]; then
-        PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        echo "    <span class='badge badge-pass'>✓ Passed</span>" >> "$REPORT_FILE"
-        echo "  </div>" >> "$REPORT_FILE"
-        echo "  <p style='color: var(--text-muted); margin:0;'>All Go functions satisfied the Cyclomatic Complexity limit (Max: 10).</p>" >> "$REPORT_FILE"
-    else
-        FAILED_AUDITS=$((FAILED_AUDITS + 1))
-        echo "    <span class='badge badge-fail'>⚠ Violations Detected</span>" >> "$REPORT_FILE"
-        echo "  </div>" >> "$REPORT_FILE"
-        echo "  <p style='color: var(--text-muted); margin-bottom: 8px;'>Functions exceeding complexity threshold (>10):</p>" >> "$REPORT_FILE"
-        echo "  <div class='code-container'><pre>" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' <<< "$GO_VIOLATIONS" >> "$REPORT_FILE"
-        echo "  </pre></div>" >> "$REPORT_FILE"
-    fi
-
-    echo "</div>" >> "$REPORT_FILE"
-fi
-
-# =========================================================
-# 3. RUBY AUDIT (RuboCop)
-# =========================================================
-if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running RuboCop for Ruby..."
-    
-    set +e
-    rubocop --config .rubocop.yml --format html -o "$OUTPUT_DIR/rubocop-tmp.html" 2>&1
-    RUBY_STATUS=$?
-    set -e
-
-    echo "<div class='audit-section'>" >> "$REPORT_FILE"
-    echo "  <div class='section-header'>" >> "$REPORT_FILE"
-    echo "    <h2 class='section-title'>🟥 Ruby Audit</h2>" >> "$REPORT_FILE"
-
-    if [ $RUBY_STATUS -eq 0 ]; then
-        PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        echo "    <span class='badge badge-pass'>✓ Passed</span>" >> "$REPORT_FILE"
-        echo "  </div>" >> "$REPORT_FILE"
-        echo "  <p style='color: var(--text-muted); margin:0;'>All Ruby code satisfies complexity standards.</p>" >> "$REPORT_FILE"
-    else
-        FAILED_AUDITS=$((FAILED_AUDITS + 1))
-        echo "    <span class='badge badge-fail'>⚠ Violations Detected</span>" >> "$REPORT_FILE"
-        echo "  </div>" >> "$REPORT_FILE"
-        echo "  <p style='color: var(--text-muted); margin-bottom: 8px;'>Complexity violations detected via RuboCop:</p>" >> "$REPORT_FILE"
-        echo -n "  <iframe srcdoc=\"" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/rubocop-tmp.html" >> "$REPORT_FILE"
-        echo "\"></iframe>" >> "$REPORT_FILE"
-    fi
-
-    rm -f "$OUTPUT_DIR/rubocop-tmp.html"
-    echo "</div>" >> "$REPORT_FILE"
-fi
-
-# Đóng HTML Container
-cat <<EOF >> "$REPORT_FILE"
+        ${JS_CONTENT}
+        ${GO_CONTENT}
+        ${RUBY_CONTENT}
     </div>
 </body>
 </html>
 EOF
-
-# =========================================================
-# 4. THAY THẾ CÁC CON SỐ METRICS THỰC TẾ
-# =========================================================
-sed -i "s/__TOTAL_AUDITS__/$TOTAL_AUDITS/g" "$REPORT_FILE"
-sed -i "s/__PASSED_AUDITS__/$PASSED_AUDITS/g" "$REPORT_FILE"
-sed -i "s/__FAILED_AUDITS__/$FAILED_AUDITS/g" "$REPORT_FILE"
 
 echo "[+] Report successfully generated at: $REPORT_FILE"
 exit 0
