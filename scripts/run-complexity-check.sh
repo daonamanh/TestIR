@@ -79,9 +79,8 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     golangci-lint cache clean > /dev/null 2>&1 || true
 
-    # CHẠY TRỰC TIẾP TRÊN TẤT CẢ FILE .GO BẰNG WILD CARD
-    # Cách này ép GolangCI-Lint quét trực tiếp file main.go bất kể cấu trúc module
-    golangci-lint run *.go ./... \
+    # BỎ *.go, CHỈ CHẠY ./... ĐỂ GOLANGCI-LINT QUÉT TOÀN BỘ MODULE CÙNG LÚC
+    golangci-lint run ./... \
         --config .golangci.yml \
         --issues-exit-code=1 > "$OUTPUT_DIR/go-tmp.txt" 2>&1
         
