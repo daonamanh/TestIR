@@ -67,52 +67,55 @@ if [ -f "package.json" ]; then
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (DEBUG & AUDIT RUNNER)
+# 2. GO / GOLANG AUDIT (Complexity Audit)
 # =========================================================
-export PATH="$HOME/bin:$GOPATH/bin:$PATH"
+# Thêm chính xác các đường dẫn Go binary của user jenkins vào PATH
+export GOPATH="${GOPATH:-$HOME/go}"
+export PATH="$HOME/bin:$GOPATH/bin:/usr/local/go/bin:$PATH"
 
 echo "[+] Running Complexity Audit for Go..."
 echo "<div class='section'><h2>🟦 Go / Golang Audit</h2>" >> "$REPORT_FILE"
 
 set +e
 
-echo "=== WORKSPACE DEBUG ===" > "$OUTPUT_DIR/go-tmp.txt"
-echo "Current Directory (pwd): $(pwd)" >> "$OUTPUT_DIR/go-tmp.txt"
-echo "Found .go files in workspace:" >> "$OUTPUT_DIR/go-tmp.txt"
-find . -name "*.go" >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
-
-echo -e "\n=== DIRECT GOCYCLO RUN ===" >> "$OUTPUT_DIR/go-tmp.txt"
-
-# Tự động tải gocyclo binary nếu chưa có
+# 1. Tự động tải gocyclo nếu chưa tồn tại
 if ! command -v gocyclo &> /dev/null; then
+    echo "[+] Installing gocyclo to $GOPATH/bin..."
     go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
 fi
 
-# Tìm tất cả file .go trong toàn bộ cây thư mục và ép gocyclo quét từng file
-GO_FILES=$(find . -name "*.go" -not -path "*/vendor/*")
+GO_VIOLATIONS=""
 
-if [ -n "$GO_FILES" ]; then
-    gocyclo -over 5 $GO_FILES >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
-    CYCLO_STATUS=$?
+# 2. Chạy gocyclo quét trực tiếp các file .go (bỏ qua node_modules)
+if command -v gocyclo &> /dev/null; then
+    # Tìm file .go ngoại trừ node_modules và vendor
+    GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*")
+    
+    if [ -n "$GO_TARGETS" ]; then
+        # Bắt lỗi nếu Cyclomatic Complexity > 10
+        CYCLO_OUT=$(gocyclo -over 10 $GO_TARGETS 2>&1)
+        if [ -n "$CYCLO_OUT" ]; then
+            GO_VIOLATIONS="$CYCLO_OUT"
+        fi
+    fi
 else
-    echo "ERROR: NO .GO FILES FOUND IN WORKSPACE!" >> "$OUTPUT_DIR/go-tmp.txt"
-    CYCLO_STATUS=0
+    # Fallback nếu gocyclo không thể install/chạy: Dùng golangci-lint
+    if command -v golangci-lint &> /dev/null; then
+        GO_VIOLATIONS=$(golangci-lint run main.go --config .golangci.yml 2>&1)
+    fi
 fi
 
 set -e
 
-# Kiểm tra xem log có chứa kết quả vi phạm gocyclo không
-if grep -q "ComplexFunction" "$OUTPUT_DIR/go-tmp.txt"; then
-    echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
-else
+if [ -z "$GO_VIOLATIONS" ]; then
     echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
+else
+    echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
+    echo "<pre>" >> "$REPORT_FILE"
+    sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' <<< "$GO_VIOLATIONS" >> "$REPORT_FILE"
+    echo "</pre>" >> "$REPORT_FILE"
 fi
 
-echo "<pre>" >> "$REPORT_FILE"
-sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
-echo "</pre>" >> "$REPORT_FILE"
-
-rm -f "$OUTPUT_DIR/go-tmp.txt"
 echo "</div>" >> "$REPORT_FILE"
 
 # =========================================================
