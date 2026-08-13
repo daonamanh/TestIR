@@ -67,7 +67,7 @@ if [ -f "package.json" ]; then
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (GolangCI-Lint) - DEBUG VERSION
+# 2. GO / GOLANG AUDIT (GolangCI-Lint)
 # =========================================================
 export PATH="$HOME/bin:$PATH"
 
@@ -77,23 +77,13 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     set +e
     
-    # 1. Kiểm tra môi trường Go và phiên bản
-    echo "=== GO ENVIRONMENT DEBUG ===" > "$OUTPUT_DIR/go-tmp.txt"
-    go version >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
-    which go >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
-    
-    # 2. Kiểm tra xem 'go vet' hoặc 'go build' có báo lỗi syntax/typecheck không
-    echo -e "\n=== GO VET CHECK ===" >> "$OUTPUT_DIR/go-tmp.txt"
-    go vet ./... >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
-    
-    # 3. Chạy golangci-lint với cờ in lỗi Typecheck chi tiết
-    echo -e "\n=== GOLANGCI-LINT RUN ===" >> "$OUTPUT_DIR/go-tmp.txt"
+    # Dọn dẹp cache
     golangci-lint cache clean > /dev/null 2>&1 || true
-    
+
+    # CHẠY LINTER THEO ĐÚNG CẤU HÌNH YML (BỎ CỜ LỖI --typecheck-fail-fast)
     golangci-lint run ./... \
         --config .golangci.yml \
-        --typecheck-fail-fast \
-        --issues-exit-code=1 >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
+        --issues-exit-code=1 > "$OUTPUT_DIR/go-tmp.txt" 2>&1
         
     GO_STATUS=$?
     
@@ -103,12 +93,10 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
         echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
     else
         echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
+        echo "<pre>" >> "$REPORT_FILE"
+        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
+        echo "</pre>" >> "$REPORT_FILE"
     fi
-
-    # Ép in toàn bộ log ra báo cáo để kiểm tra môi trường Go
-    echo "<pre>" >> "$REPORT_FILE"
-    sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
-    echo "</pre>" >> "$REPORT_FILE"
     
     rm -f "$OUTPUT_DIR/go-tmp.txt"
     echo "</div>" >> "$REPORT_FILE"
