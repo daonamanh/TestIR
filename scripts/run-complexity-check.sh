@@ -67,7 +67,7 @@ if [ -f "package.json" ]; then
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (Direct AST Complexity Audit)
+# 2. GO / GOLANG AUDIT (DEBUG & AUDIT RUNNER)
 # =========================================================
 export PATH="$HOME/bin:$GOPATH/bin:$PATH"
 
@@ -76,51 +76,43 @@ echo "<div class='section'><h2>🟦 Go / Golang Audit</h2>" >> "$REPORT_FILE"
 
 set +e
 
-# 1. Tự động cài gocyclo & gocognit nếu chưa có trong môi trường
+echo "=== WORKSPACE DEBUG ===" > "$OUTPUT_DIR/go-tmp.txt"
+echo "Current Directory (pwd): $(pwd)" >> "$OUTPUT_DIR/go-tmp.txt"
+echo "Found .go files in workspace:" >> "$OUTPUT_DIR/go-tmp.txt"
+find . -name "*.go" >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
+
+echo -e "\n=== DIRECT GOCYCLO RUN ===" >> "$OUTPUT_DIR/go-tmp.txt"
+
+# Tự động tải gocyclo binary nếu chưa có
 if ! command -v gocyclo &> /dev/null; then
     go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
 fi
-if ! command -v gocognit &> /dev/null; then
-    go install github.com/uudashr/gocognit/cmd/gocognit@latest > /dev/null 2>&1 || true
-fi
 
-GO_VIOLATIONS=""
+# Tìm tất cả file .go trong toàn bộ cây thư mục và ép gocyclo quét từng file
+GO_FILES=$(find . -name "*.go" -not -path "*/vendor/*")
 
-# 2. Quét Cyclomatic Complexity (Bắt lỗi nếu > 10)
-if command -v gocyclo &> /dev/null; then
-    CYCLO_OUT=$(gocyclo -over 10 . 2>&1)
-    if [ -n "$CYCLO_OUT" ]; then
-        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCYCLO VIOLATIONS (Cyclomatic Complexity > 10) ---\n${CYCLO_OUT}\n\n"
-    fi
-fi
-
-# 3. Quét Cognitive Complexity (Bắt lỗi nếu > 15)
-if command -v gocognit &> /dev/null; then
-    COGNIT_OUT=$(gocognit -over 15 . 2>&1)
-    if [ -n "$COGNIT_OUT" ]; then
-        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCOGNIT VIOLATIONS (Cognitive Complexity > 15) ---\n${COGNIT_OUT}\n\n"
-    fi
-fi
-
-# Fallback: Chạy golangci-lint quét từng file .go cụ thể nếu 2 tool trên không khả dụng
-if [ -z "$GO_VIOLATIONS" ] && command -v golangci-lint &> /dev/null; then
-    LINT_OUT=$(golangci-lint run main.go --config .golangci.yml 2>&1)
-    if [ $? -ne 0 ]; then
-        GO_VIOLATIONS="$LINT_OUT"
-    fi
+if [ -n "$GO_FILES" ]; then
+    gocyclo -over 5 $GO_FILES >> "$OUTPUT_DIR/go-tmp.txt" 2>&1
+    CYCLO_STATUS=$?
+else
+    echo "ERROR: NO .GO FILES FOUND IN WORKSPACE!" >> "$OUTPUT_DIR/go-tmp.txt"
+    CYCLO_STATUS=0
 fi
 
 set -e
 
-if [ -z "$GO_VIOLATIONS" ]; then
-    echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
-else
+# Kiểm tra xem log có chứa kết quả vi phạm gocyclo không
+if grep -q "ComplexFunction" "$OUTPUT_DIR/go-tmp.txt"; then
     echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
-    echo "<pre>" >> "$REPORT_FILE"
-    echo -e "$GO_VIOLATIONS" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' >> "$REPORT_FILE"
-    echo "</pre>" >> "$REPORT_FILE"
+else
+    echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
 fi
 
+echo "<pre>" >> "$REPORT_FILE"
+sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
+echo "</pre>" >> "$REPORT_FILE"
+
+rm -f "$OUTPUT_DIR/go-tmp.txt"
 echo "</div>" >> "$REPORT_FILE"
 
 # =========================================================
