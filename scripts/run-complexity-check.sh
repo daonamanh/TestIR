@@ -73,24 +73,18 @@ export PATH="$HOME/bin:$PATH"
 
 if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     echo "[+] Running GolangCI-Lint for Go..."
-    echo "Using binary: $(which golangci-lint) ($(golangci-lint --version | head -n1))"
     echo "<div class='section'><h2>🟦 Go / Golang Audit (GolangCI-Lint)</h2>" >> "$REPORT_FILE"
     
     set +e
     
-    # 1. Ép dọn dẹp sạch sẽ toàn bộ thư mục cache của golangci-lint
+    # Dọn cache kết quả
     golangci-lint cache clean > /dev/null 2>&1 || true
-    rm -rf ~/.cache/golangci-lint /var/lib/jenkins/.cache/golangci-lint 2>/dev/null || true
 
-    if [ -f "go.mod" ]; then
-        go mod tidy > /dev/null 2>&1 || true
-    fi
-
-    # 2. Chạy golangci-lint trực tiếp, ép xuất exit code khi có lỗi
+    # CHẠY CỜ -v ĐỂ XEM CHI TIẾT LINTER QUÉT NHỮNG FILE NÀO
     golangci-lint run ./... \
+        -v \
         --config .golangci.yml \
-        --issues-exit-code=1 \
-        --allow-parallel-runners > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+        --issues-exit-code=1 > "$OUTPUT_DIR/go-tmp.txt" 2>&1
         
     GO_STATUS=$?
     
@@ -98,6 +92,11 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
 
     if [ $GO_STATUS -eq 0 ]; then
         echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
+        # IN LOG VERBOSE NẾU BÁO PASSED ĐỂ DEBUG
+        echo "<p><b>Debug Output (Why Passed):</b></p>" >> "$REPORT_FILE"
+        echo "<pre>" >> "$REPORT_FILE"
+        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
+        echo "</pre>" >> "$REPORT_FILE"
     else
         echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
         echo "<pre>" >> "$REPORT_FILE"
