@@ -158,319 +158,102 @@
 set -e
 
 # =========================================================
-# 0. CẤU HÌNH MÔI TRƯỜNG & BIẾN TOÀN CỤC
+# 0. CẤU HÌNH & KHỞI TẠO
 # =========================================================
-export GOPATH="${GOPATH:-$HOME/go}"
-export PATH="$HOME/bin:$GOPATH/bin:/usr/local/go/bin:$PATH"
-
-echo "========================================="
-echo "   CODE COMPLEXITY AUDIT RUNNER         "
-echo "========================================="
-
 OUTPUT_DIR="reports"
 mkdir -p "$OUTPUT_DIR"
 REPORT_FILE="$OUTPUT_DIR/complexity-report.html"
 
-TOTAL_AUDITS=0
-PASSED_AUDITS=0
-FAILED_AUDITS=0
+TOTAL=0
+PASSED=0
+FAILED=0
 
-JS_CONTENT=""
-GO_CONTENT=""
-RUBY_CONTENT=""
+# Chứa các đoạn HTML của từng phần
+JS_HTML=""
+GO_HTML=""
+RUBY_HTML=""
 
 # =========================================================
-# 1. JAVASCRIPT / TYPESCRIPT AUDIT (ESLint)
+# 1. AUDIT (Chỉ tính toán và lưu HTML vào biến)
 # =========================================================
+
+# --- JS ---
 if [ -f "package.json" ]; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running ESLint for TypeScript/JavaScript..."
-    
-    set +e
-    npx eslint . --ext .js,.jsx,.ts,.tsx --format html > "$OUTPUT_DIR/eslint-tmp.html" 2>&1
-    ESLINT_STATUS=$?
-    set -e
-
-    if [ $ESLINT_STATUS -eq 0 ]; then
-        PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        JS_CONTENT=$(cat <<EOF
-<div class="audit-section">
-  <div class="section-header">
-    <h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2>
-    <span class="badge badge-pass">✓ Passed</span>
-  </div>
-  <p style="color: var(--text-muted); margin:0;">All JavaScript/TypeScript functions comply with complexity thresholds.</p>
-</div>
-EOF
-)
+    TOTAL=$((TOTAL + 1))
+    npx eslint . --ext .js,.jsx,.ts,.tsx --format html > "$OUTPUT_DIR/tmp_js.html" 2>&1
+    if [ $? -eq 0 ]; then
+        PASSED=$((PASSED + 1))
+        JS_HTML="<div class='audit-section'><div class='section-header'><h2 class='section-title'>🟨 JS/TS Audit</h2><span class='badge badge-pass'>✓ Passed</span></div><p>All clean.</p></div>"
     else
-        FAILED_AUDITS=$((FAILED_AUDITS + 1))
-        IFRAME_DOC=$(sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/eslint-tmp.html")
-        JS_CONTENT=$(cat <<EOF
-<div class="audit-section">
-  <div class="section-header">
-    <h2 class="section-title">🟨 TypeScript / JavaScript Audit</h2>
-    <span class="badge badge-fail">⚠ Violations Detected</span>
-  </div>
-  <p style="color: var(--text-muted); margin-bottom: 8px;">Complexity issues detected via ESLint:</p>
-  <iframe srcdoc="${IFRAME_DOC}"></iframe>
-</div>
-EOF
-)
+        FAILED=$((FAILED + 1))
+        ESCAPED_JS=$(sed -e 's/"/\&quot;/g' "$OUTPUT_DIR/tmp_js.html")
+        JS_HTML="<div class='audit-section'><div class='section-header'><h2 class='section-title'>🟨 JS/TS Audit</h2><span class='badge badge-fail'>⚠ Fail</span></div><iframe srcdoc=\"$ESCAPED_JS\"></iframe></div>"
     fi
-    rm -f "$OUTPUT_DIR/eslint-tmp.html"
+    rm -f "$OUTPUT_DIR/tmp_js.html"
 fi
 
-# =========================================================
-# 2. GO / GOLANG AUDIT (gocyclo)
-# =========================================================
-if [ -f "go.mod" ] || find . -maxdepth 2 -name "*.go" | grep -q .; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running Complexity Audit for Go..."
-    
-    set +e
-    if ! command -v gocyclo &> /dev/null; then
-        echo "[+] Installing gocyclo binary..."
-        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
-    fi
-
-    GO_VIOLATIONS=""
-    if command -v gocyclo &> /dev/null; then
-        GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*")
-        if [ -n "$GO_TARGETS" ]; then
-            CYCLO_OUT=$(gocyclo -over 10 $GO_TARGETS 2>&1)
-            if [ -n "$CYCLO_OUT" ]; then
-                GO_VIOLATIONS="$CYCLO_OUT"
-            fi
-        fi
-    fi
-    set -e
-
-    if [ -z "$GO_VIOLATIONS" ]; then
-        PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        GO_CONTENT=$(cat <<EOF
-<div class="audit-section">
-  <div class="section-header">
-    <h2 class="section-title">🟦 Go / Golang Audit</h2>
-    <span class="badge badge-pass">✓ Passed</span>
-  </div>
-  <p style="color: var(--text-muted); margin:0;">All Go functions satisfied the Cyclomatic Complexity limit (Max: 10).</p>
-</div>
-EOF
-)
+# --- GO ---
+if [ -f "go.mod" ] || find . -maxdepth 1 -name "*.go" | grep -q .; then
+    TOTAL=$((TOTAL + 1))
+    # Chạy gocyclo
+    GO_OUT=$(gocyclo -over 10 . 2>&1 || true)
+    if [ -z "$GO_OUT" ]; then
+        PASSED=$((PASSED + 1))
+        GO_HTML="<div class='audit-section'><div class='section-header'><h2 class='section-title'>🟦 Go Audit</h2><span class='badge badge-pass'>✓ Passed</span></div><p>All clean.</p></div>"
     else
-        FAILED_AUDITS=$((FAILED_AUDITS + 1))
-        ESCAPED_GO_VIOLATIONS=$(sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' <<< "$GO_VIOLATIONS")
-        GO_CONTENT=$(cat <<EOF
-<div class="audit-section">
-  <div class="section-header">
-    <h2 class="section-title">🟦 Go / Golang Audit</h2>
-    <span class="badge badge-fail">⚠ Violations Detected</span>
-  </div>
-  <p style="color: var(--text-muted); margin-bottom: 8px;">Functions exceeding complexity threshold (>10):</p>
-  <div class="code-container"><pre>${ESCAPED_GO_VIOLATIONS}</pre></div>
-</div>
-EOF
-)
+        FAILED=$((FAILED + 1))
+        # Escaping cho HTML
+        ESCAPED_GO=$(echo "$GO_OUT" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+        GO_HTML="<div class='audit-section'><div class='section-header'><h2 class='section-title'>🟦 Go Audit</h2><span class='badge badge-fail'>⚠ Fail</span></div><div class='code-container'><pre>$ESCAPED_GO</pre></div></div>"
     fi
 fi
 
-# =========================================================
-# 3. RUBY AUDIT (RuboCop)
-# =========================================================
-if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
-    TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
-    echo "[+] Running RuboCop for Ruby..."
-    
-    set +e
-    rubocop --config .rubocop.yml --format html -o "$OUTPUT_DIR/rubocop-tmp.html" 2>&1
-    RUBY_STATUS=$?
-    set -e
-
-    if [ $RUBY_STATUS -eq 0 ]; then
-        PASSED_AUDITS=$((PASSED_AUDITS + 1))
-        RUBY_CONTENT=$(cat <<EOF
-<div class="audit-section">
-  <div class="section-header">
-    <h2 class="section-title">🟥 Ruby Audit</h2>
-    <span class="badge badge-pass">✓ Passed</span>
-  </div>
-  <p style="color: var(--text-muted); margin:0;">All Ruby code satisfies complexity standards.</p>
-</div>
-EOF
-)
+# --- RUBY ---
+if [ -f ".rubocop.yml" ]; then
+    TOTAL=$((TOTAL + 1))
+    rubocop --format html -o "$OUTPUT_DIR/tmp_ruby.html" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        PASSED=$((PASSED + 1))
+        RUBY_HTML="<div class='audit-section'><div class='section-header'><h2 class='section-title'>🟥 Ruby Audit</h2><span class='badge badge-pass'>✓ Passed</span></div><p>All clean.</p></div>"
     else
-        FAILED_AUDITS=$((FAILED_AUDITS + 1))
-        IFRAME_RUBY=$(sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/rubocop-tmp.html")
-        RUBY_CONTENT=$(cat <<EOF
-<div class="audit-section">
-  <div class="section-header">
-    <h2 class="section-title">🟥 Ruby Audit</h2>
-    <span class="badge badge-fail">⚠ Violations Detected</span>
-  </div>
-  <p style="color: var(--text-muted); margin-bottom: 8px;">Complexity violations detected via RuboCop:</p>
-  <iframe srcdoc="${IFRAME_RUBY}"></iframe>
-</div>
-EOF
-)
+        FAILED=$((FAILED + 1))
+        ESCAPED_RB=$(sed -e 's/"/\&quot;/g' "$OUTPUT_DIR/tmp_ruby.html")
+        RUBY_HTML="<div class='audit-section'><div class='section-header'><h2 class='section-title'>🟥 Ruby Audit</h2><span class='badge badge-fail'>⚠ Fail</span></div><iframe srcdoc=\"$ESCAPED_RB\"></iframe></div>"
     fi
-    rm -f "$OUTPUT_DIR/rubocop-tmp.html"
+    rm -f "$OUTPUT_DIR/tmp_ruby.html"
 fi
 
 # =========================================================
-# 4. IN HOÀN CHỈNH HTML VỚI SỐ LIỆU ĐÃ TÍNH TOÁN
+# 2. XUẤT FILE HTML (Dùng printf để tránh lỗi biến)
 # =========================================================
-BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+NOW=$(date '+%Y-%m-%d %H:%M:%S')
 
-cat <<EOF > "$REPORT_FILE"
+printf "
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Complexity Audit Report</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-main: #0f172a;
-            --card-bg: #1e293b;
-            --border-color: #334155;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --pass-bg: rgba(34, 197, 94, 0.1);
-            --pass-border: #22c55e;
-            --pass-text: #4ade80;
-            --fail-bg: rgba(239, 68, 68, 0.1);
-            --fail-border: #ef4444;
-            --fail-text: #f87171;
-        }
-
-        * { box-sizing: border-box; }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0;
-            padding: 30px;
-            background-color: var(--bg-main);
-            color: var(--text-main);
-            line-height: 1.5;
-        }
-
-        .container { max-width: 1200px; margin: 0 auto; }
-
-        .header {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            padding: 24px 30px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 24px;
-        }
-        .header h1 { margin: 0; font-size: 22px; font-weight: 700; color: #fff; }
-        .header p { margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted); }
-
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 28px;
-        }
-        .metric-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            padding: 16px 20px;
-            border-radius: 10px;
-        }
-        .metric-card .title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
-        .metric-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
-        .metric-card.pass .value { color: var(--pass-text); }
-        .metric-card.fail .value { color: var(--fail-text); }
-
-        .audit-section {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .section-title { font-size: 18px; font-weight: 600; margin: 0; }
-
-        .badge {
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-        }
-        .badge-pass { background: var(--pass-bg); border: 1px solid var(--pass-border); color: var(--pass-text); }
-        .badge-fail { background: var(--fail-bg); border: 1px solid var(--fail-border); color: var(--fail-text); }
-
-        .code-container {
-            background: #090d16;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 12px;
-            overflow-x: auto;
-        }
-        pre {
-            font-family: 'Fira Code', monospace;
-            font-size: 13px;
-            color: #e2e8f0;
-            margin: 0;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        iframe {
-            width: 100%;
-            height: 600px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background: #fff;
-            margin-top: 12px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-        }
+        body { font-family: sans-serif; background: #0f172a; color: white; padding: 30px; }
+        .summary { display: flex; gap: 20px; margin-bottom: 30px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 10px; flex: 1; text-align: center; }
+        .audit-section { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .badge-pass { color: #4ade80; } .badge-fail { color: #f87171; }
+        iframe { width: 100%%; height: 500px; border: none; background: white; margin-top: 10px; }
+        .code-container { background: #000; padding: 15px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📊 Multi-Language Code Complexity Audit</h1>
-            <p>Divoro Diligence Work Compliance Report | Generated: ${BUILD_TIMESTAMP}</p>
-        </div>
-
-        <div class="summary-grid">
-            <div class="metric-card">
-                <div class="title">Total Audits</div>
-                <div class="value">${TOTAL_AUDITS}</div>
-            </div>
-            <div class="metric-card pass">
-                <div class="title">Passed</div>
-                <div class="value">${PASSED_AUDITS}</div>
-            </div>
-            <div class="metric-card fail">
-                <div class="title">Violations</div>
-                <div class="value">${FAILED_AUDITS}</div>
-            </div>
-        </div>
-
-        ${JS_CONTENT}
-        ${GO_CONTENT}
-        ${RUBY_CONTENT}
+    <h1>Complexity Audit ($NOW)</h1>
+    <div class='summary'>
+        <div class='card'>TOTAL<br><h2>%d</h2></div>
+        <div class='card'>PASSED<br><h2>%d</h2></div>
+        <div class='card'>FAILED<br><h2>%d</h2></div>
     </div>
+    %s
+    %s
+    %s
 </body>
 </html>
-EOF
+" "$TOTAL" "$PASSED" "$FAILED" "$JS_HTML" "$GO_HTML" "$RUBY_HTML" > "$REPORT_FILE"
 
-echo "[+] Report successfully generated at: $REPORT_FILE"
-exit 0
+echo "[+] Report generated: $REPORT_FILE"
