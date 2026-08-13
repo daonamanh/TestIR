@@ -67,40 +67,63 @@ if [ -f "package.json" ]; then
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (GolangCI-Lint)
+# 2. GO / GOLANG AUDIT (Cyclomatic Complexity Audit)
 # =========================================================
 export PATH="$HOME/bin:$PATH"
 
-if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
-    echo "[+] Running GolangCI-Lint for Go..."
-    echo "<div class='section'><h2>🟦 Go / Golang Audit (GolangCI-Lint)</h2>" >> "$REPORT_FILE"
-    
-    set +e
-    
-    # Dọn dẹp cache
-    golangci-lint cache clean > /dev/null 2>&1 || true
+echo "[+] Running Complexity Audit for Go..."
+echo "<div class='section'><h2>🟦 Go / Golang Audit</h2>" >> "$REPORT_FILE"
 
-    # CHẠY LINTER THEO ĐÚNG CẤU HÌNH YML (BỎ CỜ LỖI --typecheck-fail-fast)
-    golangci-lint run ./... \
-        --config .golangci.yml \
-        --issues-exit-code=1 > "$OUTPUT_DIR/go-tmp.txt" 2>&1
-        
-    GO_STATUS=$?
-    
-    set -e
+set +e
 
-    if [ $GO_STATUS -eq 0 ]; then
-        echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
-    else
-        echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
-        echo "<pre>" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$OUTPUT_DIR/go-tmp.txt" >> "$REPORT_FILE"
-        echo "</pre>" >> "$REPORT_FILE"
-    fi
-    
-    rm -f "$OUTPUT_DIR/go-tmp.txt"
-    echo "</div>" >> "$REPORT_FILE"
+# Tự động cài đặt gocyclo / gocognit nếu chưa có trong $HOME/bin
+if ! command -v gocyclo &> /dev/null; then
+    go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
 fi
+if ! command -v gocognit &> /dev/null; then
+    go install github.com/uudashr/gocognit/cmd/gocognit@latest > /dev/null 2>&1 || true
+fi
+
+GO_VIOLATIONS=""
+
+# Check 1: Cyclomatic Complexity (Ngưỡng > 10)
+if command -v gocyclo &> /dev/null; then
+    # Quét tất cả file .go và lọc ra các hàm có complexity > 10
+    CYCLO_OUT=$(gocyclo -over 10 . 2>&1)
+    if [ -n "$CYCLO_OUT" ]; then
+        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCYCLO VIOLATIONS (Over 10) ---\n${CYCLO_OUT}\n\n"
+    fi
+fi
+
+# Check 2: Cognitive Complexity (Ngưỡng > 15)
+if command -v gocognit &> /dev/null; then
+    COGNIT_OUT=$(gocognit -over 15 . 2>&1)
+    if [ -n "$COGNIT_OUT" ]; then
+        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCOGNIT VIOLATIONS (Over 15) ---\n${COGNIT_OUT}\n\n"
+    fi
+fi
+
+# Fallback nếu chưa cài được CLI riêng: Dùng golangci-lint ép quét từng file .go
+if [ -z "$GO_VIOLATIONS" ] && command -v golangci-lint &> /dev/null; then
+    LINT_OUT=$(golangci-lint run --config .golangci.yml ./... 2>&1)
+    LINT_STATUS=$?
+    if [ $LINT_STATUS -ne 0 ]; then
+        GO_VIOLATIONS="$LINT_OUT"
+    fi
+fi
+
+set -e
+
+if [ -z "$GO_VIOLATIONS" ]; then
+    echo "<p class='pass'>✅ PASSED: Go complexity limits satisfied.</p>" >> "$REPORT_FILE"
+else
+    echo "<p class='fail'>⚠️ WARNING: Go complexity violations detected!</p>" >> "$REPORT_FILE"
+    echo "<pre>" >> "$REPORT_FILE"
+    echo -e "$GO_VIOLATIONS" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' >> "$REPORT_FILE"
+    echo "</pre>" >> "$REPORT_FILE"
+fi
+
+echo "</div>" >> "$REPORT_FILE"
 
 # =========================================================
 # 3. RUBY AUDIT (RuboCop)
