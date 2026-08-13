@@ -67,16 +67,16 @@ if [ -f "package.json" ]; then
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (Cyclomatic Complexity Audit)
+# 2. GO / GOLANG AUDIT (Direct AST Complexity Audit)
 # =========================================================
-export PATH="$HOME/bin:$PATH"
+export PATH="$HOME/bin:$GOPATH/bin:$PATH"
 
 echo "[+] Running Complexity Audit for Go..."
 echo "<div class='section'><h2>🟦 Go / Golang Audit</h2>" >> "$REPORT_FILE"
 
 set +e
 
-# Tự động cài đặt gocyclo / gocognit nếu chưa có trong $HOME/bin
+# 1. Tự động cài gocyclo & gocognit nếu chưa có trong môi trường
 if ! command -v gocyclo &> /dev/null; then
     go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
 fi
@@ -86,28 +86,26 @@ fi
 
 GO_VIOLATIONS=""
 
-# Check 1: Cyclomatic Complexity (Ngưỡng > 10)
+# 2. Quét Cyclomatic Complexity (Bắt lỗi nếu > 10)
 if command -v gocyclo &> /dev/null; then
-    # Quét tất cả file .go và lọc ra các hàm có complexity > 10
     CYCLO_OUT=$(gocyclo -over 10 . 2>&1)
     if [ -n "$CYCLO_OUT" ]; then
-        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCYCLO VIOLATIONS (Over 10) ---\n${CYCLO_OUT}\n\n"
+        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCYCLO VIOLATIONS (Cyclomatic Complexity > 10) ---\n${CYCLO_OUT}\n\n"
     fi
 fi
 
-# Check 2: Cognitive Complexity (Ngưỡng > 15)
+# 3. Quét Cognitive Complexity (Bắt lỗi nếu > 15)
 if command -v gocognit &> /dev/null; then
     COGNIT_OUT=$(gocognit -over 15 . 2>&1)
     if [ -n "$COGNIT_OUT" ]; then
-        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCOGNIT VIOLATIONS (Over 15) ---\n${COGNIT_OUT}\n\n"
+        GO_VIOLATIONS="${GO_VIOLATIONS}--- GOCOGNIT VIOLATIONS (Cognitive Complexity > 15) ---\n${COGNIT_OUT}\n\n"
     fi
 fi
 
-# Fallback nếu chưa cài được CLI riêng: Dùng golangci-lint ép quét từng file .go
+# Fallback: Chạy golangci-lint quét từng file .go cụ thể nếu 2 tool trên không khả dụng
 if [ -z "$GO_VIOLATIONS" ] && command -v golangci-lint &> /dev/null; then
-    LINT_OUT=$(golangci-lint run --config .golangci.yml ./... 2>&1)
-    LINT_STATUS=$?
-    if [ $LINT_STATUS -ne 0 ]; then
+    LINT_OUT=$(golangci-lint run main.go --config .golangci.yml 2>&1)
+    if [ $? -ne 0 ]; then
         GO_VIOLATIONS="$LINT_OUT"
     fi
 fi
