@@ -222,7 +222,7 @@ EOF
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (Direct AST Cyclomatic Complexity)
+# 2. GO / GOLANG AUDIT (gocyclo)
 # =========================================================
 if [ -f "go.mod" ] || find . -maxdepth 2 -name "*.go" | grep -q .; then
     TOTAL_AUDITS=$((TOTAL_AUDITS + 1))
@@ -318,8 +318,10 @@ EOF
 fi
 
 # =========================================================
-# 4. XUẤT TOÀN BỘ BÁO CÁO HTML
+# 4. IN HOÀN CHỈNH HTML VỚI SỐ LIỆU ĐÃ TÍNH TOÁN
 # =========================================================
+BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
 cat <<EOF > "$REPORT_FILE"
 <!DOCTYPE html>
 <html lang="vi">
@@ -431,11 +433,12 @@ cat <<EOF > "$REPORT_FILE"
         }
         iframe {
             width: 100%;
-            height: 520px;
+            height: 600px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: #fff;
             margin-top: 12px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
     </style>
 </head>
@@ -443,7 +446,7 @@ cat <<EOF > "$REPORT_FILE"
     <div class="container">
         <div class="header">
             <h1>📊 Multi-Language Code Complexity Audit</h1>
-            <p>Divoro Diligence Work Compliance Report | Generated: $(date '+%Y-%m-%d %H:%M:%S')</p>
+            <p>Divoro Diligence Work Compliance Report | Generated: ${BUILD_TIMESTAMP}</p>
         </div>
 
         <div class="summary-grid">
