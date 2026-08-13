@@ -11,7 +11,7 @@ OUTPUT_DIR="reports"
 mkdir -p "$OUTPUT_DIR"
 REPORT_FILE="$OUTPUT_DIR/complexity-report.html"
 
-# Mở đầu HTML với Style UI Đồng bộ tuyệt đối
+# Mở đầu HTML với Style UI Đồng bộ
 cat <<EOF > "$REPORT_FILE"
 <!DOCTYPE html>
 <html lang="vi">
@@ -86,7 +86,6 @@ cat <<EOF > "$REPORT_FILE"
         .badge-pass { background: var(--pass-bg); color: var(--pass-text); border: 1px solid var(--pass-border); }
         .badge-fail { background: var(--fail-bg); color: var(--fail-text); border: 1px solid var(--fail-border); }
 
-        /* Bảng hiển thị lỗi dùng chung cho tất cả ngôn ngữ */
         .audit-table {
             width: 100%;
             border-collapse: collapse;
@@ -161,7 +160,6 @@ EOF
         echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
         echo "<table class='audit-table'><thead><tr><th>Location</th><th>Message</th><th>Rule ID</th></tr></thead><tbody>" >> "$REPORT_FILE"
         
-        # Parse JSON hiển thị bảng UI đẹp mắt
         node -e '
             const fs = require("fs");
             try {
@@ -175,7 +173,7 @@ EOF
             } catch (e) {}
         ' >> "$REPORT_FILE"
 
-        echo "tbody></table>" >> "$REPORT_FILE"
+        echo "</tbody></table>" >> "$REPORT_FILE"
     fi
 
     rm -f "$OUTPUT_DIR/eslint-tmp.json"
@@ -217,7 +215,6 @@ else
     echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
     echo "<table class='audit-table'><thead><tr><th>Complexity Score</th><th>Function</th><th>Location</th></tr></thead><tbody>" >> "$REPORT_FILE"
     
-    # Parse output từ gocyclo (Format: <score> <func> <location>)
     echo "$GO_VIOLATIONS" | while read -r line; do
         if [ -n "$line" ]; then
             score=$(echo "$line" | awk '{print $1}')
@@ -233,7 +230,7 @@ fi
 echo "</div>" >> "$REPORT_FILE"
 
 # =========================================================
-# 3. RUBY AUDIT (RuboCop Parse JSON)
+# 3. RUBY AUDIT (RuboCop Parse JSON dùng Ruby native)
 # =========================================================
 if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
     echo "[+] Running RuboCop for Ruby..."
@@ -256,22 +253,20 @@ EOF
         echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
         echo "<table class='audit-table'><thead><tr><th>Location</th><th>Message</th><th>Cop Name</th></tr></thead><tbody>" >> "$REPORT_FILE"
 
-        # Parse RuboCop JSON bằng Ruby hoặc Python
-        python3 -c '
-import json
-try:
-    with open("'"$OUTPUT_DIR/rubocop-tmp.json"'") as f:
-        data = json.load(f)
-        for file in data.get("files", []):
-            path = file.get("path", "")
-            for off in file.get("offenses", []):
-                loc = f"{path}:{off[\"location\"][\"line\"]}:{off[\"location\"][\"column\"]}"
-                msg = off["message"]
-                cop = off["cop_name"]
-                print(f"<tr><td class=\"code-location\">{loc}</td><td>{msg}</td><td><span class=\"rule-tag\">{cop}</span></td></tr>")
-except Exception as e:
-    pass
-' >> "$REPORT_FILE"
+        # Dùng Ruby trực tiếp để parse JSON đáng tin cậy 100%
+        ruby -r json -e '
+            begin
+                file_content = File.read("'"$OUTPUT_DIR/rubocop-tmp.json"'")
+                data = JSON.parse(file_content)
+                data["files"].each do |file|
+                    file["offenses"].each do |off|
+                        loc = "#{file["path"]}:#{off["location"]["line"]}:#{off["location"]["column"]}"
+                        puts "<tr><td class=\"code-location\">#{loc}</td><td>#{off["message"]}</td><td><span class=\"rule-tag\">#{off["cop_name"]}</span></td></tr>"
+                    end
+                end
+            rescue => e
+            end
+        ' >> "$REPORT_FILE"
 
         echo "</tbody></table>" >> "$REPORT_FILE"
     fi
@@ -289,7 +284,6 @@ EOF
 
 echo "[+] Report successfully generated at: $REPORT_FILE"
 exit 0
-
 
 
 
