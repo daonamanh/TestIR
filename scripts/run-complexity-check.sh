@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# =========================================================
-# 0. ƯU TIÊN SỬ DỤNG GOLANGCI-LINT V1.61.0 TRONG $HOME/BIN
-# =========================================================
 export PATH="$HOME/bin:$PATH"
 
 echo "========================================="
@@ -14,7 +11,7 @@ OUTPUT_DIR="reports"
 mkdir -p "$OUTPUT_DIR"
 REPORT_FILE="$OUTPUT_DIR/complexity-report.html"
 
-# Mở đầu HTML với CSS UI Đồng bộ
+# Mở đầu HTML với Style UI Đồng bộ tuyệt đối
 cat <<EOF > "$REPORT_FILE"
 <!DOCTYPE html>
 <html lang="vi">
@@ -35,10 +32,11 @@ cat <<EOF > "$REPORT_FILE"
             --fail-bg: #fef2f2;
             --fail-text: #b91c1c;
             --fail-border: #fecaca;
+            --rule-bg: #f1f5f9;
         }
 
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             margin: 0; 
             padding: 30px 20px; 
             background-color: var(--bg-body); 
@@ -46,34 +44,26 @@ cat <<EOF > "$REPORT_FILE"
             line-height: 1.5;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1200px; margin: 0 auto; }
 
         .header { 
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
             color: white; 
-            padding: 28px 32px; 
+            padding: 24px 30px; 
             border-radius: 12px; 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             margin-bottom: 24px;
         }
-        .header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
-        .header p { margin: 8px 0 0 0; font-size: 13px; color: #94a3b8; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+        .header p { margin: 6px 0 0 0; font-size: 13px; color: #94a3b8; }
 
-        /* Card Section đồng bộ */
         .section { 
             background: var(--card-bg); 
             padding: 24px; 
             margin-bottom: 24px; 
             border-radius: 12px; 
             border: 1px solid var(--border-color);
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-            transition: box-shadow 0.2s ease;
-        }
-        .section:hover {
-            box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.05);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
         .section-header {
@@ -85,63 +75,57 @@ cat <<EOF > "$REPORT_FILE"
             border-bottom: 1px solid #f1f5f9;
         }
 
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .section-title { font-size: 18px; font-weight: 600; margin: 0; }
 
-        /* Status Badges */
         .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
             padding: 6px 14px;
             border-radius: 20px;
             font-size: 13px;
             font-weight: 600;
         }
-        .badge-pass {
-            background-color: var(--pass-bg);
-            color: var(--pass-text);
-            border: 1px solid var(--pass-border);
-        }
-        .badge-fail {
-            background-color: var(--fail-bg);
-            color: var(--fail-text);
-            border: 1px solid var(--fail-border);
-        }
+        .badge-pass { background: var(--pass-bg); color: var(--pass-text); border: 1px solid var(--pass-border); }
+        .badge-fail { background: var(--fail-bg); color: var(--fail-text); border: 1px solid var(--fail-border); }
 
-        /* Content Container */
-        .content-container {
-            margin-top: 16px;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
+        /* Bảng hiển thị lỗi dùng chung cho tất cả ngôn ngữ */
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 14px;
         }
-
-        iframe { 
-            width: 100%; 
-            height: 480px; 
-            border: none;
-            display: block;
-            background: #ffffff; 
+        .audit-table th {
+            background-color: #f8fafc;
+            color: var(--text-muted);
+            text-align: left;
+            padding: 10px 14px;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
         }
-
-        pre { 
-            background: #0f172a; 
-            color: #f1f5f9; 
-            padding: 18px; 
-            margin: 0;
-            overflow-x: auto; 
-            font-family: "JetBrains Mono", "Fira Code", Consolas, Monaco, monospace; 
+        .audit-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+        .audit-table tr:last-child td { border-bottom: none; }
+        
+        .code-location {
+            font-family: monospace;
             font-size: 13px;
-            line-height: 1.6;
-            white-space: pre-wrap; 
-            max-height: 480px;
+            color: #2563eb;
+            font-weight: 500;
+        }
+        .rule-tag {
+            display: inline-block;
+            background: var(--rule-bg);
+            color: #475569;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .cyclo-score {
+            font-weight: bold;
+            color: var(--fail-text);
         }
     </style>
 </head>
@@ -154,13 +138,13 @@ cat <<EOF > "$REPORT_FILE"
 EOF
 
 # =========================================================
-# 1. JAVASCRIPT / TYPESCRIPT AUDIT (ESLint)
+# 1. JAVASCRIPT / TYPESCRIPT AUDIT (ESLint Parse JSON)
 # =========================================================
 if [ -f "package.json" ]; then
     echo "[+] Running ESLint for TypeScript/JavaScript..."
     
     set +e
-    npx eslint . --ext .js,.jsx,.ts,.tsx --format html > "$OUTPUT_DIR/eslint-tmp.html" 2>&1
+    npx eslint . --ext .js,.jsx,.ts,.tsx --format json > "$OUTPUT_DIR/eslint-tmp.json" 2>&1
     ESLINT_STATUS=$?
     set -e
 
@@ -172,20 +156,34 @@ EOF
 
     if [ $ESLINT_STATUS -eq 0 ]; then
         echo "<span class='badge badge-pass'>✅ PASSED</span></div>" >> "$REPORT_FILE"
-        echo "<p style='color: var(--text-muted); font-size: 14px; margin: 0;'>No complexity violations detected in JS/TS files.</p>" >> "$REPORT_FILE"
+        echo "<p style='color: var(--text-muted); margin: 0;'>No complexity violations detected in JS/TS files.</p>" >> "$REPORT_FILE"
     else
         echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
-        echo "<div class='content-container'><iframe srcdoc=\"" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/eslint-tmp.html" >> "$REPORT_FILE"
-        echo "\"></iframe></div>" >> "$REPORT_FILE"
+        echo "<table class='audit-table'><thead><tr><th>Location</th><th>Message</th><th>Rule ID</th></tr></thead><tbody>" >> "$REPORT_FILE"
+        
+        # Parse JSON hiển thị bảng UI đẹp mắt
+        node -e '
+            const fs = require("fs");
+            try {
+                const data = JSON.parse(fs.readFileSync("'"$OUTPUT_DIR/eslint-tmp.json"'"));
+                data.forEach(file => {
+                    file.messages.forEach(msg => {
+                        const loc = `${file.filePath.replace(process.cwd(), "")}:${msg.line}:${msg.column}`;
+                        console.log(`<tr><td class="code-location">${loc}</td><td>${msg.message}</td><td><span class="rule-tag">${msg.ruleId || "N/A"}</span></td></tr>`);
+                    });
+                });
+            } catch (e) {}
+        ' >> "$REPORT_FILE"
+
+        echo "tbody></table>" >> "$REPORT_FILE"
     fi
 
-    rm -f "$OUTPUT_DIR/eslint-tmp.html"
+    rm -f "$OUTPUT_DIR/eslint-tmp.json"
     echo "</div>" >> "$REPORT_FILE"
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (Complexity Audit)
+# 2. GO / GOLANG AUDIT (gocyclo Parse Table)
 # =========================================================
 export GOPATH="${GOPATH:-$HOME/go}"
 export PATH="$HOME/bin:$GOPATH/bin:/usr/local/go/bin:$PATH"
@@ -193,30 +191,17 @@ export PATH="$HOME/bin:$GOPATH/bin:/usr/local/go/bin:$PATH"
 echo "[+] Running Complexity Audit for Go..."
 
 set +e
-
-# Tự động tải gocyclo nếu chưa tồn tại
 if ! command -v gocyclo &> /dev/null; then
-    echo "[+] Installing gocyclo to $GOPATH/bin..."
     go install github.com/fzipp/gocyclo/cmd/gocyclo@latest > /dev/null 2>&1 || true
 fi
 
 GO_VIOLATIONS=""
-
 if command -v gocyclo &> /dev/null; then
     GO_TARGETS=$(find . -name "*.go" -not -path "*/node_modules/*" -not -path "*/vendor/*")
-    
     if [ -n "$GO_TARGETS" ]; then
-        CYCLO_OUT=$(gocyclo -over 10 $GO_TARGETS 2>&1)
-        if [ -n "$CYCLO_OUT" ]; then
-            GO_VIOLATIONS="$CYCLO_OUT"
-        fi
-    fi
-else
-    if command -v golangci-lint &> /dev/null; then
-        GO_VIOLATIONS=$(golangci-lint run main.go --config .golangci.yml 2>&1)
+        GO_VIOLATIONS=$(gocyclo -over 10 $GO_TARGETS 2>&1)
     fi
 fi
-
 set -e
 
 cat <<EOF >> "$REPORT_FILE"
@@ -227,24 +212,34 @@ EOF
 
 if [ -z "$GO_VIOLATIONS" ]; then
     echo "<span class='badge badge-pass'>✅ PASSED</span></div>" >> "$REPORT_FILE"
-    echo "<p style='color: var(--text-muted); font-size: 14px; margin: 0;'>Cyclomatic complexity is within limits (&le; 10) for all Go functions.</p>" >> "$REPORT_FILE"
+    echo "<p style='color: var(--text-muted); margin: 0;'>Cyclomatic complexity is within limits (&le; 10) for all Go functions.</p>" >> "$REPORT_FILE"
 else
     echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
-    echo "<div class='content-container'><pre>" >> "$REPORT_FILE"
-    sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' <<< "$GO_VIOLATIONS" >> "$REPORT_FILE"
-    echo "</pre></div>" >> "$REPORT_FILE"
+    echo "<table class='audit-table'><thead><tr><th>Complexity Score</th><th>Function</th><th>Location</th></tr></thead><tbody>" >> "$REPORT_FILE"
+    
+    # Parse output từ gocyclo (Format: <score> <func> <location>)
+    echo "$GO_VIOLATIONS" | while read -r line; do
+        if [ -n "$line" ]; then
+            score=$(echo "$line" | awk '{print $1}')
+            func=$(echo "$line" | awk '{print $2}')
+            loc=$(echo "$line" | awk '{print $3}')
+            echo "<tr><td class='cyclo-score'>Cyclo: $score</td><td><b>$func</b></td><td class='code-location'>$loc</td></tr>" >> "$REPORT_FILE"
+        fi
+    done
+
+    echo "</tbody></table>" >> "$REPORT_FILE"
 fi
 
 echo "</div>" >> "$REPORT_FILE"
 
 # =========================================================
-# 3. RUBY AUDIT (RuboCop)
+# 3. RUBY AUDIT (RuboCop Parse JSON)
 # =========================================================
 if [ -f ".rubocop.yml" ] && command -v rubocop &> /dev/null; then
     echo "[+] Running RuboCop for Ruby..."
     
     set +e
-    rubocop --config .rubocop.yml --format html -o "$OUTPUT_DIR/rubocop-tmp.html" 2>&1
+    rubocop --config .rubocop.yml --format json -o "$OUTPUT_DIR/rubocop-tmp.json" 2>&1
     RUBY_STATUS=$?
     set -e
 
@@ -256,19 +251,36 @@ EOF
 
     if [ $RUBY_STATUS -eq 0 ]; then
         echo "<span class='badge badge-pass'>✅ PASSED</span></div>" >> "$REPORT_FILE"
-        echo "<p style='color: var(--text-muted); font-size: 14px; margin: 0;'>No RuboCop complexity rules violated.</p>" >> "$REPORT_FILE"
+        echo "<p style='color: var(--text-muted); margin: 0;'>No RuboCop complexity rules violated.</p>" >> "$REPORT_FILE"
     else
         echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
-        echo "<div class='content-container'><iframe srcdoc=\"" >> "$REPORT_FILE"
-        sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' "$OUTPUT_DIR/rubocop-tmp.html" >> "$REPORT_FILE"
-        echo "\"></iframe></div>" >> "$REPORT_FILE"
+        echo "<table class='audit-table'><thead><tr><th>Location</th><th>Message</th><th>Cop Name</th></tr></thead><tbody>" >> "$REPORT_FILE"
+
+        # Parse RuboCop JSON bằng Ruby hoặc Python
+        python3 -c '
+import json
+try:
+    with open("'"$OUTPUT_DIR/rubocop-tmp.json"'") as f:
+        data = json.load(f)
+        for file in data.get("files", []):
+            path = file.get("path", "")
+            for off in file.get("offenses", []):
+                loc = f"{path}:{off[\"location\"][\"line\"]}:{off[\"location\"][\"column\"]}"
+                msg = off["message"]
+                cop = off["cop_name"]
+                print(f"<tr><td class=\"code-location\">{loc}</td><td>{msg}</td><td><span class=\"rule-tag\">{cop}</span></td></tr>")
+except Exception as e:
+    pass
+' >> "$REPORT_FILE"
+
+        echo "</tbody></table>" >> "$REPORT_FILE"
     fi
 
-    rm -f "$OUTPUT_DIR/rubocop-tmp.html"
+    rm -f "$OUTPUT_DIR/rubocop-tmp.json"
     echo "</div>" >> "$REPORT_FILE"
 fi
 
-# Đóng file HTML
+# Đóng HTML
 cat <<EOF >> "$REPORT_FILE"
     </div>
 </body>
