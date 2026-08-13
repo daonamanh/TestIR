@@ -5,13 +5,13 @@ run:
 linters:
   disable-all: true
   enable:
-    - typecheck    # BẮT BUỘC: Để linter phân tích được AST của Go
-    - gocyclo      # Kiểm tra Cyclomatic Complexity
-    - gocognit     # Kiểm tra Cognitive Complexity
-    - cyclop       # Giới hạn độ phức tạp của hàm
-    - funlen       # Giới hạn độ dài hàm
-    - goconst      # Phát hiện chuỗi lặp lại
-    - nestif       # Kiểm tra IF lồng nhau
+    - typecheck
+    - gocyclo
+    - gocognit
+    - cyclop
+    - funlen
+    - goconst
+    - nestif
 
 linters-settings:
   gocyclo:

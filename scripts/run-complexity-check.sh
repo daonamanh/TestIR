@@ -65,6 +65,7 @@ if [ -f "package.json" ]; then
     rm -f "$OUTPUT_DIR/eslint-tmp.html"
     echo "</div>" >> "$REPORT_FILE"
 fi
+
 # =========================================================
 # 2. GO / GOLANG AUDIT (GolangCI-Lint)
 # =========================================================
@@ -77,19 +78,22 @@ if [ -f ".golangci.yml" ] && command -v golangci-lint &> /dev/null; then
     
     set +e
     
-    # Tạo cache sạch riêng cho lượt build
-    export GOCACHE="/tmp/jenkins-gocache-$(date +%s)"
+    # 1. Ép dọn dẹp sạch sẽ toàn bộ thư mục cache của golangci-lint
     golangci-lint cache clean > /dev/null 2>&1 || true
+    rm -rf ~/.cache/golangci-lint /var/lib/jenkins/.cache/golangci-lint 2>/dev/null || true
 
     if [ -f "go.mod" ]; then
         go mod tidy > /dev/null 2>&1 || true
     fi
 
-    # Chạy golangci-lint chuẩn theo file .golangci.yml
-    golangci-lint run ./... --config .golangci.yml > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+    # 2. Chạy golangci-lint trực tiếp, ép xuất exit code khi có lỗi
+    golangci-lint run ./... \
+        --config .golangci.yml \
+        --issues-exit-code=1 \
+        --allow-parallel-runners > "$OUTPUT_DIR/go-tmp.txt" 2>&1
+        
     GO_STATUS=$?
     
-    rm -rf "$GOCACHE"
     set -e
 
     if [ $GO_STATUS -eq 0 ]; then
