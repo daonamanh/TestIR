@@ -498,12 +498,12 @@ EOF
 fi
 
 # =========================================================
-# 2. GO / GOLANG AUDIT (Sử dụng golangci-lint)
+# 2. GO / GOLANG AUDIT (golangci-lint)
 # =========================================================
 export GOPATH="${GOPATH:-$HOME/go}"
 export PATH="$HOME/bin:$GOPATH/bin:/usr/local/go/bin:$PATH"
 
-echo "[+] Running Complexity Audit for Go using golangci-lint..."
+echo "[+] Running Complexity Audit for Go..."
 
 cat <<EOF >> "$REPORT_FILE"
     <div class="section">
@@ -511,46 +511,46 @@ cat <<EOF >> "$REPORT_FILE"
             <h2 class="section-title">🟦 Go / Golang Audit (golangci-lint)</h2>
 EOF
 
-if [ -f ".golangci.yml" ] || [ -f "go.mod" ]; then
-    set +e
-    golangci-lint run --out-format json > "$OUTPUT_DIR/golangci-tmp.json" 2>&1
-    GO_STATUS=$?
-    set -e
-
-    if [ $GO_STATUS -eq 0 ]; then
-        echo "<span class='badge badge-pass'>✅ PASSED</span></div>" >> "$REPORT_FILE"
-        echo "<p style='color: var(--text-muted); margin: 0;'>All complexity metrics are within safe limits.</p>" >> "$REPORT_FILE"
-    else
-        echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
-        echo "<table class='audit-table'><thead><tr><th class='col-location'>Location</th><th class='col-message'>Violation Description</th><th class='col-rule'>Linter Rule</th></tr></thead><tbody>" >> "$REPORT_FILE"
-        
-        # Parse kết quả JSON bằng Node.js để render chuẩn 3 cột HTML
-        node -e '
-            const fs = require("fs");
-            try {
-                const raw = fs.readFileSync("'"$OUTPUT_DIR/golangci-tmp.json"'");
-                const data = JSON.parse(raw);
-                if (data.Issues && data.Issues.length > 0) {
-                    data.Issues.forEach(issue => {
-                        const loc = `${issue.Pos.Filename}:${issue.Pos.Line}:${issue.Pos.Column}`;
-                        const msg = issue.Text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                        const linter = issue.FromLinter || "complexity";
-                        console.log(`<tr><td class="code-location">${loc}</td><td>${msg}</td><td><span class="rule-tag cyclo-tag">${linter}</span></td></tr>`);
-                    });
-                }
-            } catch (e) {
-                console.log(`<tr><td colspan="3">Failed to parse Go audit output.</td></tr>`);
-            }
-        ' >> "$REPORT_FILE"
-
-        echo "</tbody></table>" >> "$REPORT_FILE"
-    fi
-    rm -f "$OUTPUT_DIR/golangci-tmp.json"
-else
-    echo "<span class='badge badge-pass'>ℹ️ SKIPPED</span></div>" >> "$REPORT_FILE"
-    echo "<p style='color: var(--text-muted); margin: 0;'>No Go project files (.golangci.yml or go.mod) found.</p>" >> "$REPORT_FILE"
+# Chỉ định rõ cấu hình và quét toàn bộ thư mục ./...
+CONFIG_FLAG=""
+if [ -f ".golangci.yml" ]; then
+    CONFIG_FLAG="-c .golangci.yml"
 fi
 
+set +e
+golangci-lint run $CONFIG_FLAG ./... --out-format json > "$OUTPUT_DIR/golangci-tmp.json" 2>&1
+GO_STATUS=$?
+set -e
+
+if [ $GO_STATUS -eq 0 ]; then
+    echo "<span class='badge badge-pass'>✅ PASSED</span></div>" >> "$REPORT_FILE"
+    echo "<p style='color: var(--text-muted); margin: 0;'>All complexity metrics are within safe limits.</p>" >> "$REPORT_FILE"
+else
+    echo "<span class='badge badge-fail'>⚠️ VIOLATIONS DETECTED</span></div>" >> "$REPORT_FILE"
+    echo "<table class='audit-table'><thead><tr><th class='col-location'>Location</th><th class='col-message'>Violation Description</th><th class='col-rule'>Linter Rule</th></tr></thead><tbody>" >> "$REPORT_FILE"
+    
+    node -e '
+        const fs = require("fs");
+        try {
+            const raw = fs.readFileSync("'"$OUTPUT_DIR/golangci-tmp.json"'");
+            const data = JSON.parse(raw);
+            if (data.Issues && data.Issues.length > 0) {
+                data.Issues.forEach(issue => {
+                    const loc = `${issue.Pos.Filename}:${issue.Pos.Line}:${issue.Pos.Column}`;
+                    const msg = issue.Text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    const linter = issue.FromLinter || "complexity";
+                    console.log(`<tr><td class="code-location">${loc}</td><td>${msg}</td><td><span class="rule-tag cyclo-tag">${linter}</span></td></tr>`);
+                });
+            }
+        } catch (e) {
+            console.log(`<tr><td colspan="3">Failed to parse Go audit output.</td></tr>`);
+        }
+    ' >> "$REPORT_FILE"
+
+    echo "</tbody></table>" >> "$REPORT_FILE"
+fi
+
+rm -f "$OUTPUT_DIR/golangci-tmp.json"
 echo "</div>" >> "$REPORT_FILE"
 
 # =========================================================
